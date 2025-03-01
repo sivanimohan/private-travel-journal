@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gcm_defaultSenderId" translatable="false">340150226399</string>
+    <string name="google_api_key" translatable="false">AIzaSyD-yUjqxCZ5Yt3r41zka84i1SCRvkGRseM</string>
+    <string name="google_app_id" translatable="false">1:340150226399:android:fb89dde6933d8c823ac86a</string>
+    <string name="google_crash_reporting_api_key" translatable="false">AIzaSyD-yUjqxCZ5Yt3r41zka84i1SCRvkGRseM</string>
+    <string name="google_storage_bucket" translatable="false">travel-journal-app-c7756.firebasestorage.app</string>
+    <string name="project_id" translatable="false">travel-journal-app-c7756</string>
+</resources>
