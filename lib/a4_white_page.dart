@@ -1,111 +1,140 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:video_player/video_player.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:appwrite/appwrite.dart';
 import 'dart:io';
 import 'dart:convert';
 
 class A4WhitePage extends StatefulWidget {
+  final String pageId;
+  final String folderId;
+  final String userId;
   final String pageName;
+  final Client client;
 
-  const A4WhitePage({super.key, required this.pageName});
+  const A4WhitePage({
+    super.key,
+    required this.pageId,
+    required this.folderId,
+    required this.userId,
+    required this.pageName,
+    required this.client,
+  });
 
   @override
   _A4WhitePageState createState() => _A4WhitePageState();
 }
 
 class _A4WhitePageState extends State<A4WhitePage> {
-  List<Map<String, dynamic>> content = [];
-  List<TextEditingController> controllers = [];
+  List<Map<String, dynamic>> media = [];
   Color backgroundColor = Colors.white;
-  bool isScribbling = false;
+  late Databases databases;
+  late Storage storage;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
     super.initState();
+    databases = Databases(widget.client);
+    storage = Storage(widget.client);
     _loadSavedContent();
   }
 
-  @override
-  void dispose() {
-    for (var controller in controllers) {
-      controller.dispose();
-    }
-    super.dispose();
-  }
-
   Future<void> _saveContent() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    prefs.setString('savedContent_${widget.pageName}', jsonEncode(content));
-    prefs.setInt('backgroundColor_${widget.pageName}', backgroundColor.value);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Content saved successfully!')),
-    );
+    try {
+      final mediaIds = media.map((m) => m['mediaId']).toList();
+      await databases.updateDocument(
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbeccb00382aae9f27',
+        documentId: widget.pageId,
+        data: {
+          'backgroundColor': backgroundColor.value,
+          'mediaIds': mediaIds,
+          'folderId': widget.folderId,
+          'userId': widget.userId,
+        },
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Content saved successfully!')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving content: $e')),
+      );
+    }
   }
 
   Future<void> _loadSavedContent() async {
-    final SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? savedData = prefs.getString('savedContent_${widget.pageName}');
-    int? savedColor = prefs.getInt('backgroundColor_${widget.pageName}');
+    try {
+      final doc = await databases.getDocument(
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbeccb00382aae9f27',
+        documentId: widget.pageId,
+      );
+      backgroundColor = Color(doc.data['backgroundColor']);
+      List<String> mediaIds = List<String>.from(doc.data['mediaIds'] ?? []);
 
-    if (savedData != null) {
-      List<dynamic> savedList = jsonDecode(savedData);
+      List<Map<String, dynamic>> mediaData = [];
+      for (String mediaId in mediaIds) {
+        final mediaDoc = await databases.getDocument(
+          databaseId: '67c32fc700070ceeadac',
+          collectionId: '67cd34960000649f059d',
+          documentId: mediaId,
+        );
+        mediaData.add(mediaDoc.data);
+      }
       setState(() {
-        content = savedList.map((item) {
-          return {
-            'type': item['type'],
-            'value': item['value'],
-            'dx': item['dx'],
-            'dy': item['dy']
-          };
-        }).toList();
+        media = mediaData;
+      });
+    } catch (e) {
+      print('No saved content found: $e');
+    }
+  }
 
-        controllers = List.generate(content.length, (index) {
-          return TextEditingController(
-              text: content[index]['type'] == 'text'
-                  ? content[index]['value']
-                  : '');
+  Future<String?> _uploadFile(File file, String type) async {
+    try {
+      final result = await storage.createFile(
+        bucketId: '67cd36510039f3d96c62',
+        fileId: ID.unique(),
+        file: InputFile.fromPath(path: file.path),
+      );
+      return result.$id;
+    } catch (e) {
+      print('Error uploading file: $e');
+      return null;
+    }
+  }
+
+  Future<void> _addMedia(String type) async {
+    final XFile? file;
+    if (type == 'image') {
+      file = await _picker.pickImage(source: ImageSource.gallery);
+    } else if (type == 'video') {
+      file = await _picker.pickVideo(source: ImageSource.gallery);
+    } else {
+      return;
+    }
+
+    if (file != null) {
+      String? fileId = await _uploadFile(File(file.path), type);
+      if (fileId != null) {
+        final mediaDoc = await databases.createDocument(
+          databaseId: '67c32fc700070ceeadac',
+          collectionId: '67cd34960000649f059d',
+          documentId: ID.unique(),
+          data: {
+            'pageId': widget.pageId,
+            'folderId': widget.folderId,
+            'userId': widget.userId,
+            'type': type,
+            'value': fileId,
+            'position': jsonEncode({'x': 50.0, 'y': 50.0}),
+          },
+        );
+        setState(() {
+          media.add(mediaDoc.data);
         });
-      });
-    }
-
-    if (savedColor != null) {
-      setState(() {
-        backgroundColor = Color(savedColor);
-      });
-    }
-  }
-
-  void _addText() {
-    setState(() {
-      content.add({'type': 'text', 'value': '', 'dx': 50.0, 'dy': 50.0});
-      controllers.add(TextEditingController());
-    });
-  }
-
-  void _updateText(int index, String newText) {
-    content[index]['value'] = newText;
-  }
-
-  Future<void> _addPhoto() async {
-    final ImagePicker _picker = ImagePicker();
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        content.add(
-            {'type': 'photo', 'value': image.path, 'dx': 50.0, 'dy': 50.0});
-      });
-    }
-  }
-
-  Future<void> _addVideo() async {
-    final ImagePicker _picker = ImagePicker();
-    final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
-    if (video != null) {
-      setState(() {
-        content.add({'type': 'video', 'value': video.path});
-      });
+      }
     }
   }
 
@@ -113,7 +142,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Choose Background Color"),
+        title: const Text("Choose Background Color"),
         content: BlockPicker(
           pickerColor: backgroundColor,
           onColorChanged: (color) {
@@ -124,7 +153,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         ),
         actions: [
           TextButton(
-            child: Text("Done"),
+            child: const Text("Done"),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -132,171 +161,29 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  void _toggleScribbling() {
-    setState(() {
-      isScribbling = !isScribbling;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.pageName,
-            style: TextStyle(fontFamily: 'DancingScript', color: Colors.white)),
+        title: Text(widget.pageName),
         backgroundColor: Colors.redAccent,
         actions: [
-          IconButton(icon: Icon(Icons.save), onPressed: _saveContent),
+          IconButton(icon: const Icon(Icons.save), onPressed: _saveContent),
           IconButton(
-              icon: Icon(Icons.format_paint),
-              onPressed: _changeBackgroundColor),
-          IconButton(icon: Icon(Icons.brush), onPressed: _toggleScribbling),
-        ],
-      ),
-      body: Stack(
-        children: [
-          Container(
-            color: backgroundColor,
-            padding: EdgeInsets.all(16),
-            child: Stack(
-              children: content.asMap().entries.map((entry) {
-                int index = entry.key;
-                final item = entry.value;
-
-                if (item['type'] == 'text') {
-                  return Positioned(
-                    left: item['dx'],
-                    top: item['dy'],
-                    child: GestureDetector(
-                      onPanUpdate: (details) {
-                        setState(() {
-                          content[index]['dx'] += details.delta.dx;
-                          content[index]['dy'] += details.delta.dy;
-                        });
-                      },
-                      child: Container(
-                        width: 250,
-                        padding: EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: TextField(
-                          controller: controllers[index],
-                          onChanged: (value) => _updateText(index, value),
-                          style: TextStyle(
-                              fontFamily: 'DancingScript', fontSize: 20),
-                          decoration: InputDecoration(border: InputBorder.none),
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                        ),
-                      ),
-                    ),
-                  );
-                } else if (item['type'] == 'photo') {
-                  return Positioned(
-                    left: item['dx'],
-                    top: item['dy'],
-                    child: GestureDetector(
-                      onPanUpdate: (details) {
-                        setState(() {
-                          content[index]['dx'] += details.delta.dx;
-                          content[index]['dy'] += details.delta.dy;
-                        });
-                      },
-                      child: Image.file(File(item['value']),
-                          width: 150, height: 150, fit: BoxFit.contain),
-                    ),
-                  );
-                } else if (item['type'] == 'video') {
-                  return VideoWidget(videoPath: item['value']);
-                }
-                return Container();
-              }).toList(),
-            ),
+            icon: const Icon(Icons.format_paint),
+            onPressed: _changeBackgroundColor,
           ),
-          if (isScribbling) ScribbleCanvas(),
+          IconButton(
+            icon: const Icon(Icons.image),
+            onPressed: () => _addMedia('image'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.video_library),
+            onPressed: () => _addMedia('video'),
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          showModalBottomSheet(
-            context: context,
-            builder: (context) {
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                      leading: Icon(Icons.text_fields, color: Colors.redAccent),
-                      title: Text('Add Text'),
-                      onTap: () {
-                        _addText();
-                        Navigator.pop(context);
-                      }),
-                  ListTile(
-                      leading: Icon(Icons.photo, color: Colors.redAccent),
-                      title: Text('Add Photo'),
-                      onTap: () {
-                        _addPhoto();
-                        Navigator.pop(context);
-                      }),
-                  ListTile(
-                      leading:
-                          Icon(Icons.video_library, color: Colors.redAccent),
-                      title: Text('Add Video'),
-                      onTap: () {
-                        _addVideo();
-                        Navigator.pop(context);
-                      }),
-                ],
-              );
-            },
-          );
-        },
-        backgroundColor: Colors.redAccent,
-        child: Icon(Icons.add, color: Colors.white),
-      ),
+      body: Container(color: backgroundColor),
     );
-  }
-}
-
-class VideoWidget extends StatefulWidget {
-  final String videoPath;
-  const VideoWidget({Key? key, required this.videoPath}) : super(key: key);
-
-  @override
-  _VideoWidgetState createState() => _VideoWidgetState();
-}
-
-class _VideoWidgetState extends State<VideoWidget> {
-  late VideoPlayerController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = VideoPlayerController.file(File(widget.videoPath))
-      ..initialize().then((_) {
-        setState(() {});
-      });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _controller.value.isInitialized
-        ? VideoPlayer(_controller)
-        : CircularProgressIndicator();
-  }
-}
-
-class ScribbleCanvas extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(); // Implement scribble
   }
 }

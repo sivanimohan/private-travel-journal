@@ -1,99 +1,104 @@
 import 'package:flutter/material.dart';
+import 'package:appwrite/appwrite.dart';
+import 'package:intl/intl.dart';
 
 class AddPagePage extends StatelessWidget {
-  final pageNameController = TextEditingController();
+  final TextEditingController pageNameController = TextEditingController();
+  final String folderId;
+  final String userId;
+  final Databases database;
 
-  AddPagePage({super.key});
+  static const String COLLECTION_ID =
+      '67cbeccb00382aae9f27'; // Pages Collection ID
+  static const String DATABASE_ID = '67c32fc700070ceeadac'; // Database ID
+
+  AddPagePage({
+    super.key,
+    required Client client,
+    required this.folderId,
+    required this.userId,
+  }) : database = Databases(client);
+
+  Future<void> _savePage(BuildContext context) async {
+    String pageName = pageNameController.text.trim();
+    if (pageName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a page name!'),
+          backgroundColor: Color(0xFF2C7DA0),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await database.createDocument(
+        databaseId: DATABASE_ID,
+        collectionId: COLLECTION_ID,
+        documentId: ID.unique(),
+        data: {
+          'folderId': folderId,
+          'userId': userId,
+          'pageName': pageName,
+          'backgroundColor': 0xFFFFFFFF, // Default white background
+          'location': '{"latitude": 0.0, "longitude": 0.0}', // Default location
+          'mediaIds': [], // Empty media list initially
+          'createdAt':
+              DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),
+        },
+      );
+
+      Navigator.pop(context, pageName); // Return the page name to update list
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to save page: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Add Page',
           style: TextStyle(
-            fontFamily: 'Merriweather',
-            fontSize: 24,
-            fontWeight: FontWeight.w300,
-            color: Colors.white, // White for contrast
-          ),
+              fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white),
         ),
-        backgroundColor: Color(0xFF2C7DA0), // Dark blue
-        elevation: 4,
+        backgroundColor: const Color(0xFF2C7DA0),
       ),
       body: Container(
-        color: Color(0xFFA9D6E5), // Light blue background
+        color: const Color(0xFFA9D6E5),
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Enter Page Name:',
-              style: TextStyle(
-                fontSize: 20,
-                fontFamily: 'Merriweather',
-                fontWeight: FontWeight.w300,
-                color: Color(0xFF2C7DA0), // Dark blue
-              ),
-            ),
-            SizedBox(height: 20),
             TextField(
               controller: pageNameController,
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Color(0xFF2C7DA0)), // Dark blue
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                      color: Color(0xFF2C7DA0), width: 2), // Dark blue
                 ),
                 hintText: 'Page Name',
-                hintStyle: TextStyle(
-                  fontFamily: 'Inter',
-                  color: Color(0xFF2C7DA0)
-                      .withOpacity(0.6), // Dark blue with opacity
-                ),
-              ),
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 18,
-                color: Color(0xFF2C7DA0), // Dark blue
               ),
             ),
-            SizedBox(height: 30),
+            const SizedBox(height: 30),
             ElevatedButton(
-              onPressed: () {
-                String pageName = pageNameController.text;
-                if (pageName.isNotEmpty) {
-                  Navigator.pop(context, pageName);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Please enter a page name!',
-                        style: TextStyle(fontFamily: 'Inter'),
-                      ),
-                      backgroundColor: Color(0xFF2C7DA0), // Dark blue
-                    ),
-                  );
-                }
-              },
+              onPressed: () => _savePage(context),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Color(0xFF2C7DA0), // Dark blue
-                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                backgroundColor: const Color(0xFF2C7DA0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: Text(
+              child: const Text(
                 'Add Page',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 18,
-                  color: Colors.white, // White for contrast
-                ),
+                style: TextStyle(fontSize: 18, color: Colors.white),
               ),
             ),
           ],

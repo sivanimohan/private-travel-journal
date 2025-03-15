@@ -1,13 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:traveljournal/login.dart';
-import 'package:traveljournal/home_page.dart';
-import 'package:traveljournal/signup_page.dart';
+import 'package:appwrite/appwrite.dart';
 
 void main() {
+  late Client client;
+
+  setUp(() {
+    client = Client()
+        .setEndpoint(
+            'https://YOUR_APPWRITE_ENDPOINT/v1') // Replace with your endpoint
+        .setProject('YOUR_PROJECT_ID'); // Replace with your project ID
+  });
+
   testWidgets('Login screen loads properly', (WidgetTester tester) async {
     // Build the app with LoginPage as the starting screen
-    await tester.pumpWidget(MaterialApp(home: LoginPage()));
+    await tester.pumpWidget(MaterialApp(home: LoginPage(client: client)));
 
     // Check if "Login" text is present
     expect(find.text("Login"), findsOneWidget);
@@ -22,7 +30,7 @@ void main() {
   testWidgets('Navigate to Home Page on valid login',
       (WidgetTester tester) async {
     // Build the app with LoginPage
-    await tester.pumpWidget(MaterialApp(home: LoginPage()));
+    await tester.pumpWidget(MaterialApp(home: LoginPage(client: client)));
 
     // Enter email and password
     await tester.enterText(find.byType(TextField).at(0), "test@example.com");
@@ -38,7 +46,7 @@ void main() {
 
   testWidgets('Navigate to SignUp Page', (WidgetTester tester) async {
     // Build the app with LoginPage
-    await tester.pumpWidget(MaterialApp(home: LoginPage()));
+    await tester.pumpWidget(MaterialApp(home: LoginPage(client: client)));
 
     // Tap "Don't have an account? Sign up"
     await tester

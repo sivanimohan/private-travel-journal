@@ -41,7 +41,8 @@ dependencies:
   google_fonts: ^6.1.0
   appwrite: ^14.0.0
   flutter_appauth: ^8.0.3
-  auth0_flutter: ^1.8.0
+
+  intl: ^0.20.2
 
 
 dev_dependencies:
@@ -64,6 +65,7 @@ flutter:
   assets:
     - assets/travel_background.jpg
     - assets/loginpage.jpg
+    - assets/google.png
     - assets/homepage.jpg
   fonts:
     - family: Merriweather

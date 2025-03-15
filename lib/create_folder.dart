@@ -1,131 +1,159 @@
 import 'package:flutter/material.dart';
+import 'package:appwrite/appwrite.dart';
 
-class CreateFolderPage extends StatelessWidget {
-  const CreateFolderPage({super.key});
+class CreateFolderPage extends StatefulWidget {
+  final Client client;
+  final String userId;
+  final String? clientName;
+
+  const CreateFolderPage({
+    super.key,
+    required this.client,
+    required this.userId,
+    this.clientName,
+  });
+
+  @override
+  _CreateFolderPageState createState() => _CreateFolderPageState();
+}
+
+class _CreateFolderPageState extends State<CreateFolderPage> {
+  final TextEditingController folderNameController = TextEditingController();
+  late Databases databases;
+
+  @override
+  void initState() {
+    super.initState();
+    databases = Databases(widget.client);
+  }
+
+  /// 🔹 Create Folder in Appwrite Database
+  Future<void> _createFolder() async {
+    String folderName = folderNameController.text.trim();
+    if (folderName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("❗ Please enter a folder name!"),
+          backgroundColor: Color(0xFF2C7DA0),
+        ),
+      );
+      return;
+    }
+
+    try {
+      await databases.createDocument(
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbebb60023c51812a1',
+        documentId: ID.unique(),
+        data: {
+          'folderId': ID.unique(),
+          'userId': widget.userId,
+          'folderName': folderName,
+          'location': {'latitude': 0.0, 'longitude': 0.0}, // Default location
+          'createdAt': DateTime.now().toIso8601String(),
+          if (widget.clientName != null)
+            'clientName': widget.clientName, // Include clientName if available
+        },
+      );
+
+      Navigator.pop(context, folderName); // Return folder name on success
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to create folder: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final folderNameController = TextEditingController();
-
     return Scaffold(
       appBar: AppBar(
-        title: Text(
+        title: const Text(
           'Create Folder',
           style: TextStyle(
             fontFamily: 'Merriweather',
-            fontSize: 24,
-            fontWeight: FontWeight.w300,
-            color: Colors.white, // White text for contrast
+            fontSize: 22,
+            fontWeight: FontWeight.w500,
           ),
         ),
-        backgroundColor: Color(0xFF2C7DA0), // Dark blue
+        backgroundColor: const Color(0xFF2C7DA0),
         elevation: 4,
       ),
-      body: Container(
-        color: Color(0xFFA9D6E5), // Light blue background
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                'Enter Folder Name:',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontFamily: 'Merriweather',
-                  fontWeight: FontWeight.w300,
-                  color: Color(0xFF2C7DA0), // Dark blue
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Folder Name:',
+              style: TextStyle(
+                fontSize: 18,
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w400,
+                color: Color(0xFF2C7DA0),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: folderNameController,
+              decoration: InputDecoration(
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF2C7DA0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide:
+                      const BorderSide(color: Color(0xFF2C7DA0), width: 2),
+                ),
+                hintText: 'Enter folder name',
+                hintStyle: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFF2C7DA0),
+                  fontSize: 16,
                 ),
               ),
-              SizedBox(height: 20),
-              TextField(
-                controller: folderNameController,
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide:
-                        BorderSide(color: Color(0xFF2C7DA0)), // Dark blue
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Color(0xFF2C7DA0), width: 2),
-                  ),
-                  hintText: 'Folder Name',
-                  hintStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    color:
-                        Color(0xFF2C7DA0).withOpacity(0.6), // Dark blue faded
-                  ),
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 18,
+                color: Color(0xFF2C7DA0),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _createFolder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2C7DA0),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+              child: const Text(
+                'Create Folder',
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 18,
-                  color: Color(0xFF2C7DA0), // Dark blue text
+                  color: Colors.white,
                 ),
               ),
-              SizedBox(height: 30),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2C7DA0), // Dark blue
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 18,
-                        color: Colors.white, // White text for contrast
-                      ),
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () {
-                      String folderName = folderNameController.text;
-                      if (folderName.isNotEmpty) {
-                        Navigator.pop(context, folderName);
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Please enter a folder name!',
-                              style: TextStyle(fontFamily: 'Inter'),
-                            ),
-                            backgroundColor: Color(0xFF2C7DA0), // Dark blue
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Color(0xFF2C7DA0), // Dark blue
-                      padding:
-                          EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: Text(
-                      'Create',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 18,
-                        color: Colors.white, // White text for contrast
-                      ),
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancel',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 16,
+                  color: Color(0xFF2C7DA0),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

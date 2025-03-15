@@ -1,9 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:appwrite/appwrite.dart';
+import 'package:appwrite/models.dart' as models;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login.dart';
+import 'package:appwrite/enums.dart';
+
+import 'home_page.dart';
 
 class SignUpPage extends StatefulWidget {
+  final Client client;
+
+  const SignUpPage({Key? key, required this.client}) : super(key: key);
+
   @override
   _SignUpPageState createState() => _SignUpPageState();
 }
@@ -13,6 +21,17 @@ class _SignUpPageState extends State<SignUpPage> {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
+  late final Account account;
+  late final Databases database;
+
+  @override
+  void initState() {
+    super.initState();
+    account = Account(widget.client);
+    database = Databases(widget.client);
+  }
+
+  /// 🔹 Sign Up with Email and Password
   Future<void> _signUp() async {
     final String fullName = fullNameController.text.trim();
     final String email = emailController.text.trim();
@@ -20,24 +39,131 @@ class _SignUpPageState extends State<SignUpPage> {
 
     if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please fill all fields")),
+        const SnackBar(content: Text("Please fill all fields")),
       );
       return;
     }
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setString('fullName', fullName);
-    await prefs.setString('email', email);
-    await prefs.setString('password', password);
+    try {
+      // Create user in Appwrite Authentication
+      models.User user = await account.create(
+        userId: ID.unique(),
+        email: email,
+        password: password,
+        name: fullName,
+      );
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Account Created Successfully!")),
-    );
+      // Save user data in the database
+      await database.createDocument(
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbe1ce00196895cd13',
+        documentId: user.$id,
+        data: {
+          'userId': user.$id,
+          'email': email,
+          'name': fullName,
+        },
+      );
 
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (context) => LoginPage()),
-    );
+      // Save user details in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userId', user.$id);
+      await prefs.setString('fullName', fullName);
+      await prefs.setString('email', email);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("✅ Account Created Successfully!"),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate to HomePage
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomePage(
+            client: widget.client,
+            userId: user.$id,
+            fullName: fullName,
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("❌ Sign-Up Failed: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// 🔹 Google Sign-In Function
+  Future<void> _signInWithGoogle() async {
+    try {
+      await account.createOAuth2Session(
+        provider: OAuthProvider.google,
+        success: 'appwrite://auth',
+        failure: 'appwrite://auth-failed',
+      );
+
+      // Get user details after login
+      models.User user = await account.get();
+
+      try {
+        // Check if user already exists in database
+        await database.getDocument(
+          databaseId: '67c32fc700070ceeadac',
+          collectionId: '67cbe1ce00196895cd13',
+          documentId: user.$id,
+        );
+      } catch (_) {
+        // Create user document if not found
+        await database.createDocument(
+          databaseId: '67c32fc700070ceeadac',
+          collectionId: '67cbe1ce00196895cd13',
+          documentId: user.$id,
+          data: {
+            'userId': user.$id,
+            'email': user.email,
+            'name': user.name,
+          },
+        );
+      }
+
+      // Save user details in SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userId', user.$id);
+      await prefs.setString('fullName', user.name);
+      await prefs.setString('email', user.email);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("✅ Logged in as ${user.name}"),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate to HomePage
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomePage(
+            client: widget.client,
+            userId: user.$id,
+            fullName: user.name,
+          ),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("❌ Google Sign-In Failed: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -46,60 +172,77 @@ class _SignUpPageState extends State<SignUpPage> {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          /// Background Image
-          Image.asset(
-            'assets/loginpage.jpg', // Ensure this image exists
-            fit: BoxFit.cover,
-          ),
-
-          /// Welcome Text
-          Positioned(
-            top: 100,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Text(
-                "Welcome to Odyssey",
-                style: GoogleFonts.alexBrush(
-                  fontSize: 40,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-
-          /// Signup Box
+          Image.asset('assets/loginpage.jpg', fit: BoxFit.cover),
           Center(
-            child: Container(
-              padding: EdgeInsets.all(20),
-              width: 320,
-              decoration: BoxDecoration(
-                color: Color(0xFFA9D6E5).withOpacity(0.9),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text("Sign Up",
+            child: SingleChildScrollView(
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                width: 320,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFA9D6E5).withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    /// Title
+                    Text(
+                      "Sign Up",
                       style: GoogleFonts.alegreya(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2C7DA0))),
-                  SizedBox(height: 20),
-                  TextField(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF2C7DA0),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    /// Full Name Input
+                    TextField(
                       controller: fullNameController,
-                      decoration: InputDecoration(labelText: "Full Name")),
-                  TextField(
+                      decoration: const InputDecoration(labelText: "Full Name"),
+                    ),
+                    const SizedBox(height: 10),
+
+                    /// Email Input
+                    TextField(
                       controller: emailController,
-                      decoration: InputDecoration(labelText: "Email")),
-                  TextField(
+                      decoration: const InputDecoration(labelText: "Email"),
+                    ),
+                    const SizedBox(height: 10),
+
+                    /// Password Input
+                    TextField(
                       controller: passwordController,
-                      decoration: InputDecoration(labelText: "Password"),
-                      obscureText: true),
-                  SizedBox(height: 20),
-                  ElevatedButton(onPressed: _signUp, child: Text("Sign Up")),
-                ],
+                      obscureText: true,
+                      decoration: const InputDecoration(labelText: "Password"),
+                    ),
+                    const SizedBox(height: 20),
+
+                    /// Sign Up Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _signUp,
+                        child: const Text("Sign Up"),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    /// Google Sign-In Button
+                    ElevatedButton.icon(
+                      onPressed: _signInWithGoogle,
+                      icon: Image.asset('assets/google.png', width: 20),
+                      label: const Text("Sign in with Google"),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

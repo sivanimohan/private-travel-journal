@@ -1,165 +1,206 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
+import 'package:appwrite/appwrite.dart';
+import 'package:appwrite/models.dart';
 import 'add_page.dart';
 import 'a4_white_page.dart';
 
 class FolderPage extends StatefulWidget {
+  final Client client;
+  final String folderId;
   final String folderName;
-  final List<String> pages;
-  const FolderPage({super.key, required this.folderName, required this.pages});
+  final String userId;
+
+  const FolderPage({
+    super.key,
+    required this.client,
+    required this.folderId,
+    required this.folderName,
+    required this.userId,
+  });
 
   @override
   _FolderPageState createState() => _FolderPageState();
 }
 
 class _FolderPageState extends State<FolderPage> {
-  List<String> pages = [];
+  late Databases _database;
+  List<Map<String, String>> pages = [];
+  final String databaseId = '67c32fc700070ceeadac';
+  final String collectionId = '67cbeccb00382aae9f27';
 
   @override
   void initState() {
     super.initState();
+    _setupAppwrite();
     _loadPages();
   }
 
-  // Load saved pages from SharedPreferences
+  void _setupAppwrite() {
+    _database = Databases(widget.client);
+  }
+
+  /// 🔹 Load Pages
   Future<void> _loadPages() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      pages = prefs.getStringList(widget.folderName) ?? [];
-    });
+    try {
+      final response = await _database.listDocuments(
+        databaseId: databaseId,
+        collectionId: collectionId,
+        queries: [Query.equal('folderId', widget.folderId)],
+      );
+
+      setState(() {
+        pages = response.documents
+            .map((doc) => {
+                  'pageId': doc.$id,
+                  'pageName': doc.data['pageName'] as String,
+                })
+            .toList();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load pages: $e')),
+      );
+    }
   }
 
-  // Save pages to SharedPreferences
-  Future<void> _savePages() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(widget.folderName, pages);
+  /// 🔹 Add Page
+  Future<void> _addPage(String pageName) async {
+    try {
+      final newPage = await _database.createDocument(
+        databaseId: databaseId,
+        collectionId: collectionId,
+        documentId: ID.unique(),
+        data: {
+          'pageName': pageName,
+          'folderId': widget.folderId,
+          'userId': widget.userId,
+          'backgroundColor': 0xFFFFFFFF, // Default white background
+          'mediaIds': [],
+          'location': '{}',
+        },
+      );
+
+      setState(() {
+        pages.add({'pageId': newPage.$id, 'pageName': pageName});
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error adding page: $e')),
+      );
+    }
   }
 
-  void _addPage(String pageName) {
-    setState(() {
-      pages.add(pageName);
-    });
-    _savePages();
-  }
+  /// 🔹 Remove Page
+  Future<void> _removePage(int index) async {
+    try {
+      await _database.deleteDocument(
+        databaseId: databaseId,
+        collectionId: collectionId,
+        documentId: pages[index]['pageId']!,
+      );
 
-  void _removePage(int index) {
-    setState(() {
-      pages.removeAt(index);
-    });
-    _savePages();
+      setState(() {
+        pages.removeAt(index);
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting page: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.folderName,
-          style: TextStyle(
-            fontFamily: 'Merriweather',
-            fontSize: 24,
-            fontWeight: FontWeight.w300,
-            color: Colors.white, // White for contrast
-          ),
-        ),
-        backgroundColor: Color(0xFF2C7DA0), // Dark blue
-        elevation: 4,
+        title: Text(widget.folderName),
+        backgroundColor: const Color(0xFF2C7DA0),
       ),
       body: Container(
-        color: Color(0xFFA9D6E5), // Light blue background
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Pages in ${widget.folderName}:',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontFamily: 'Merriweather',
-                  fontWeight: FontWeight.w300,
-                  color: Color(0xFF2C7DA0), // Dark blue
-                ),
+        color: const Color(0xFFA9D6E5),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            Text(
+              'Pages in ${widget.folderName}:',
+              style: const TextStyle(
+                fontSize: 20,
+                color: Color(0xFF2C7DA0),
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
               ),
-              SizedBox(height: 20),
-              Expanded(
-                child: pages.isEmpty
-                    ? Center(
-                        child: Text(
-                          'No pages yet. Tap the + button to add one!',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 18,
-                            color: Color(0xFF2C7DA0), // Dark blue
+            ),
+            const SizedBox(height: 20),
+            Expanded(
+              child: pages.isEmpty
+                  ? const Center(
+                      child: Text(
+                        'No pages yet. Tap + to add one!',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.builder(
+                      itemCount: pages.length,
+                      itemBuilder: (context, index) {
+                        return Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          textAlign: TextAlign.center,
-                        ),
-                      )
-                    : ListView.builder(
-                        itemCount: pages.length,
-                        itemBuilder: (context, index) {
-                          return GestureDetector(
+                          child: ListTile(
+                            title: Text(
+                              pages[index]['pageName']!,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontFamily: 'Inter',
+                                color: Color(0xFF2C7DA0),
+                              ),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _removePage(index),
+                            ),
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => A4WhitePage(
-                                    pageName: pages[index],
+                                    client: widget.client,
+                                    pageId: pages[index]['pageId']!,
+                                    pageName: pages[index]['pageName']!,
+                                    folderId: widget.folderId,
+                                    userId: widget.userId,
                                   ),
                                 ),
                               );
                             },
-                            child: Card(
-                              color:
-                                  Colors.white, // White background for contrast
-                              elevation: 4,
-                              margin: EdgeInsets.symmetric(vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: ListTile(
-                                contentPadding: EdgeInsets.all(16),
-                                title: Text(
-                                  pages[index],
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2C7DA0), // Dark blue
-                                  ),
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.delete,
-                                      color: Color(0xFF2C7DA0)), // Dark blue
-                                  onPressed: () => _removePage(index),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          final newPageName = await Navigator.push(
+        backgroundColor: const Color(0xFF2C7DA0),
+        onPressed: () {
+          Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => AddPagePage(),
+              builder: (context) => AddPagePage(
+                client: widget.client,
+                folderId: widget.folderId,
+                userId: widget.userId,
+              ),
             ),
-          );
-
-          if (newPageName != null && newPageName.isNotEmpty) {
-            _addPage(newPageName);
-          }
+          ).then((newPageName) {
+            if (newPageName != null) {
+              _addPage(newPageName);
+            }
+          });
         },
-        backgroundColor: Color(0xFF2C7DA0), // Dark blue
-        elevation: 8,
-        child: Icon(Icons.add, color: Colors.white), // White for contrast
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
