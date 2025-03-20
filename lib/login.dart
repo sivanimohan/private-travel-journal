@@ -4,13 +4,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as models;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import 'home_page.dart';
 import 'signup_page.dart';
 
 class LoginPage extends StatefulWidget {
   final Client client;
 
-  const LoginPage({Key? key, required this.client}) : super(key: key);
+  const LoginPage({super.key, required this.client});
 
   @override
   _LoginPageState createState() => _LoginPageState();
@@ -18,6 +19,9 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   late Account account;
+
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   void initState() {
@@ -70,6 +74,56 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+  /// 🔹 Email & Password Sign-In Function
+  Future<void> _emailSignIn() async {
+    try {
+      final String email = _emailController.text.trim();
+      final String password = _passwordController.text.trim();
+
+      if (email.isEmpty || password.isEmpty) {
+        throw "Please enter both email and password.";
+      }
+
+      await account.createEmailPasswordSession(
+        email: email,
+        password: password,
+      );
+
+      // Retrieve user details after login
+      final models.User user = await account.get();
+      String userId = user.$id;
+      String fullName = user.name;
+
+      print("✅ Logged in as: $fullName ($email)");
+
+      // 🔹 Save user details to SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('userId', userId);
+      await prefs.setString('fullName', fullName);
+      await prefs.setString('email', email);
+
+      // 🔹 Navigate to HomePage
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => HomePage(
+            client: widget.client,
+            userId: userId,
+            fullName: fullName,
+          ),
+        ),
+      );
+    } catch (e) {
+      print("❌ Email sign-in failed: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Email sign-in failed: ${e.toString()}"),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -105,6 +159,53 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+                    /// 🔹 Email TextField
+                    TextField(
+                      controller: _emailController,
+                      decoration: InputDecoration(
+                        labelText: "Email",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        prefixIcon: const Icon(Icons.email),
+                      ),
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(height: 15),
+
+                    /// 🔹 Password TextField
+                    TextField(
+                      controller: _passwordController,
+                      decoration: InputDecoration(
+                        labelText: "Password",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        prefixIcon: const Icon(Icons.lock),
+                      ),
+                      obscureText: true,
+                    ),
+                    const SizedBox(height: 20),
+
+                    /// 🔹 Sign In with Email & Password Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _emailSignIn,
+                        child: const Text("Sign in with Email"),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2C7DA0),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
 
                     /// 🔹 Google Sign-In Button
                     SizedBox(

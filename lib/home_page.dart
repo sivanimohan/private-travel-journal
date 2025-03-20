@@ -1,21 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as models;
-import 'package:google_fonts/google_fonts.dart';
+import 'create_folder.dart';
+import 'dart:io';
 
 class HomePage extends StatefulWidget {
   final Client client;
   final String userId;
   final String fullName;
-  final String? clientName;
 
   const HomePage({
-    Key? key,
+    super.key,
     required this.client,
     required this.userId,
     required this.fullName,
-    this.clientName,
-  }) : super(key: key);
+  });
 
   @override
   _HomePageState createState() => _HomePageState();
@@ -24,8 +23,7 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final Account account;
   late final Databases databases;
-  List<models.Document> folders = [];
-  bool isLoading = true;
+  List<Map<String, dynamic>> _folders = [];
 
   @override
   void initState() {
@@ -37,27 +35,18 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _loadFolders() async {
     try {
-      // Load folders using clientName if available
-      final List<String> queries = [
-        Query.equal('userId', widget.userId),
-      ];
-
-      if (widget.clientName != null && widget.clientName!.isNotEmpty) {
-        queries.add(Query.equal('clientName', widget.clientName!));
-      }
-
-      final response = await databases.listDocuments(
+      final result = await databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
         collectionId: '67cbebb60023c51812a1',
-        queries: queries,
+        queries: [
+          Query.equal('userId', widget.userId), // Filter by userId
+        ],
       );
 
       setState(() {
-        folders = response.documents;
-        isLoading = false;
+        _folders = result.documents.map((doc) => doc.data).toList();
       });
     } catch (e) {
-      setState(() => isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('❌ Failed to load folders: $e'),
@@ -67,27 +56,234 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<String?> getIpAddress() async {
+    for (var interface in await NetworkInterface.list()) {
+      for (var addr in interface.addresses) {
+        if (addr.type == InternetAddressType.IPv4) {
+          return addr.address;
+        }
+      }
+    }
+    return null;
+  }
+
+  void _createFolder() async {
+    try {
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => CreateFolderPage(
+            client: widget.client,
+            userId: widget.userId,
+            clientName: widget.fullName,
+          ),
+        ),
+      );
+
+      if (result != null) {
+        String? ipAddress = await getIpAddress();
+
+        await databases.createDocument(
+          databaseId: '67c32fc700070ceeadac',
+          collectionId: '67cbebb60023c51812a1',
+          documentId: ID.unique(),
+          data: {
+            'folderId': ID.unique(),
+            'userId': widget.userId,
+            'name': result, // ✅ Ensure field is defined as 'name'
+            'createdAt': DateTime.now().toIso8601String(),
+            'location': ipAddress ?? '0.0.0.0',
+          },
+          permissions: [
+            Permission.create(Role.user(widget.userId)),
+            Permission.read(Role.user(widget.userId)),
+            Permission.update(Role.user(widget.userId)),
+            Permission.delete(Role.user(widget.userId)),
+          ],
+        );
+
+        _loadFolders();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✅ Folder "$result" created successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error creating folder: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Failed to create folder: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _signOut() async {
+    try {
+      await account.deleteSession(sessionId: 'current');
+      Navigator.pushReplacementNamed(context, '/login');
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Sign out failed: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _showUserInfo() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('👤 ${widget.fullName}'),
+                Text('📧 ${widget.userId}', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+            TextButton(
+              onPressed: _signOut,
+              child: const Text(
+                'Sign Out',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.blueAccent,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Welcome, ${widget.fullName}')),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : folders.isEmpty
-              ? const Center(child: Text('No folders available'))
-              : ListView.builder(
-                  itemCount: folders.length,
-                  itemBuilder: (context, index) {
-                    final folder = folders[index];
-                    return ListTile(
-                      title: Text(folder.data['folderName']),
-                      subtitle: Text('Created at: ${folder.data['createdAt']}'),
-                      onTap: () {
-                        // Handle folder tap
-                      },
-                    );
-                  },
+      body: Stack(
+        children: [
+          // Background Image
+          Positioned.fill(
+            child: Image.asset(
+              'assets/homepage.jpg', // Path to background image
+              fit: BoxFit.cover,
+            ),
+          ),
+          Column(
+            children: [
+              // Top Welcome Panel
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF2C7DA0),
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(24),
+                    bottomRight: Radius.circular(24),
+                  ),
                 ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '👋 Welcome, ${widget.fullName}!',
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: _showUserInfo,
+                      icon: const Icon(
+                        Icons.account_circle,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Folder List
+              Expanded(
+                child: _folders.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No folders available.',
+                          style:
+                              TextStyle(fontSize: 18, color: Color(0xFF2C7DA0)),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: _folders.length,
+                        padding: const EdgeInsets.all(12),
+                        itemBuilder: (context, index) {
+                          final folder = _folders[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: GestureDetector(
+                              onTap: () {
+                                // Add action for tapping the folder
+                              },
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.8),
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      folder['name'],
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w500,
+                                        color: Color(0xFF2C7DA0),
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: Color(0xFF2C7DA0),
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _createFolder,
+        backgroundColor: const Color(0xFF2C7DA0),
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }

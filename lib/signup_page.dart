@@ -10,7 +10,7 @@ import 'home_page.dart';
 class SignUpPage extends StatefulWidget {
   final Client client;
 
-  const SignUpPage({Key? key, required this.client}) : super(key: key);
+  const SignUpPage({super.key, required this.client});
 
   @override
   _SignUpPageState createState() => _SignUpPageState();

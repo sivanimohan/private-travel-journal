@@ -34,12 +34,12 @@ class MyApp extends StatelessWidget {
   final String? email;
 
   const MyApp({
-    Key? key,
+    super.key,
     required this.client,
     this.userId,
     this.fullName,
     this.email,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
