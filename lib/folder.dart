@@ -30,12 +30,8 @@ class _FolderPageState extends State<FolderPage> {
   @override
   void initState() {
     super.initState();
-    _setupAppwrite();
-    _loadPages();
-  }
-
-  void _setupAppwrite() {
     _database = Databases(widget.client);
+    _loadPages();
   }
 
   /// 🔹 Load Pages
@@ -56,14 +52,25 @@ class _FolderPageState extends State<FolderPage> {
             .toList();
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load pages: $e')),
-      );
+      debugPrint('Failed to load pages: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Failed to load pages. Please try again.')),
+        );
+      }
     }
   }
 
-  /// 🔹 Add Page
+  /// 🔹 Add Page (Prevents Duplicate Names)
   Future<void> _addPage(String pageName) async {
+    if (pages.any((page) => page['pageName'] == pageName)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('A page with this name already exists!')),
+      );
+      return;
+    }
+
     try {
       final newPage = await _database.createDocument(
         databaseId: databaseId,
@@ -73,7 +80,7 @@ class _FolderPageState extends State<FolderPage> {
           'pageName': pageName,
           'folderId': widget.folderId,
           'userId': widget.userId,
-          'backgroundColor': 0xFFFFFFFF, // Default white background
+          'backgroundColor': 0xFFFFFFFF,
           'mediaIds': [],
           'location': '{}',
         },
@@ -83,8 +90,9 @@ class _FolderPageState extends State<FolderPage> {
         pages.add({'pageId': newPage.$id, 'pageName': pageName});
       });
     } catch (e) {
+      debugPrint('Error adding page: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding page: $e')),
+        const SnackBar(content: Text('Failed to add page. Please try again.')),
       );
     }
   }
@@ -102,8 +110,9 @@ class _FolderPageState extends State<FolderPage> {
         pages.removeAt(index);
       });
     } catch (e) {
+      debugPrint('Error deleting page: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting page: $e')),
+        const SnackBar(content: Text('Failed to delete page.')),
       );
     }
   }

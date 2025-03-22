@@ -49,7 +49,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
           'folderId': ID.unique(),
           'userId': widget.userId,
           'name': folderName, // ✅ Use 'name' instead of 'folderName'
-          'location': {'latitude': 0.0, 'longitude': 0.0}, // Default location
+
           'createdAt': DateTime.now().toIso8601String(),
         },
       );

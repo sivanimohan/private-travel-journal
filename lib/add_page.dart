@@ -31,12 +31,15 @@ class AddPagePage extends StatelessWidget {
       return;
     }
 
+    String pageId = ID.unique(); // Generate unique page ID
+
     try {
       await database.createDocument(
         databaseId: DATABASE_ID,
         collectionId: COLLECTION_ID,
-        documentId: ID.unique(),
+        documentId: pageId, // Use the generated ID
         data: {
+          'pageId': pageId, // Add `pageId` explicitly
           'folderId': folderId,
           'userId': userId,
           'pageName': pageName,

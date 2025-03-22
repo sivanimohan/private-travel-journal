@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:appwrite/appwrite.dart';
 import 'package:appwrite/models.dart' as models;
 import 'create_folder.dart';
+import 'folder.dart';
 import 'dart:io';
 
 class HomePage extends StatefulWidget {
@@ -39,7 +40,7 @@ class _HomePageState extends State<HomePage> {
         databaseId: '67c32fc700070ceeadac',
         collectionId: '67cbebb60023c51812a1',
         queries: [
-          Query.equal('userId', widget.userId), // Filter by userId
+          Query.equal('userId', widget.userId),
         ],
       );
 
@@ -90,7 +91,7 @@ class _HomePageState extends State<HomePage> {
           data: {
             'folderId': ID.unique(),
             'userId': widget.userId,
-            'name': result, // ✅ Ensure field is defined as 'name'
+            'name': result,
             'createdAt': DateTime.now().toIso8601String(),
             'location': ipAddress ?? '0.0.0.0',
           },
@@ -173,16 +174,14 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Background Image
           Positioned.fill(
             child: Image.asset(
-              'assets/homepage.jpg', // Path to background image
+              'assets/homepage.jpg',
               fit: BoxFit.cover,
             ),
           ),
           Column(
             children: [
-              // Top Welcome Panel
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -215,8 +214,6 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-
-              // Folder List
               Expanded(
                 child: _folders.isEmpty
                     ? const Center(
@@ -235,7 +232,17 @@ class _HomePageState extends State<HomePage> {
                             padding: const EdgeInsets.symmetric(vertical: 8),
                             child: GestureDetector(
                               onTap: () {
-                                // Add action for tapping the folder
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => FolderPage(
+                                      client: widget.client,
+                                      folderId: folder['folderId'],
+                                      folderName: folder['name'],
+                                      userId: widget.userId,
+                                    ),
+                                  ),
+                                );
                               },
                               child: Container(
                                 decoration: BoxDecoration(
