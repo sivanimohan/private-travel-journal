@@ -52,6 +52,7 @@ android {
 
 dependencies {
     implementation 'io.appwrite:sdk-for-android:6.1.0'
+    
 }
 
 flutter {
