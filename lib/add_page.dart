@@ -44,7 +44,8 @@ class AddPagePage extends StatelessWidget {
           'userId': userId,
           'pageName': pageName,
           'backgroundColor': 0xFFFFFFFF, // Default white background
-          'location': '{"latitude": 0.0, "longitude": 0.0}', // Default location
+          'location': '0.0.0.0', // Default IP address format
+          // Default location
           'mediaIds': [], // Empty media list initially
           'createdAt':
               DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),

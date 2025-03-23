@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:appwrite/appwrite.dart';
+import 'package:video_player/video_player.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'dart:io';
 import 'dart:convert';
 
@@ -31,6 +33,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
   late Databases databases;
   late Storage storage;
   final ImagePicker _picker = ImagePicker();
+  VideoPlayerController? _videoController;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  String? _audioUrl;
 
   @override
   void initState() {
@@ -73,7 +78,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
       );
       backgroundColor = Color(doc.data['backgroundColor']);
       List<String> mediaIds = List<String>.from(doc.data['mediaIds'] ?? []);
-
       List<Map<String, dynamic>> mediaData = [];
       for (String mediaId in mediaIds) {
         final mediaDoc = await databases.getDocument(
@@ -114,7 +118,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     } else {
       return;
     }
-
     if (file != null) {
       String? fileId = await _uploadFile(File(file.path), type);
       if (fileId != null) {
@@ -136,6 +139,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
         });
       }
     }
+  }
+
+  void _playAudio(String url) {
+    _audioPlayer.play(UrlSource(url));
+    setState(() {
+      _audioUrl = url;
+    });
   }
 
   void _changeBackgroundColor() {
@@ -180,6 +190,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
           IconButton(
             icon: const Icon(Icons.video_library),
             onPressed: () => _addMedia('video'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.music_note),
+            onPressed: () => _playAudio(
+                'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'),
           ),
         ],
       ),
