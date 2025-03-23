@@ -8,6 +8,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart'; // Add this import
 
 class A4WhitePage extends StatefulWidget {
   final String pageId;
@@ -38,6 +39,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
   VideoPlayerController? _videoController;
   final AudioPlayer _audioPlayer = AudioPlayer();
   String? _audioUrl;
+  bool isAudioPlaying = false;
 
   // New state variables for additional features
   String selectedFont = 'Delius Swash Caps';
@@ -78,6 +80,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     _loadSavedContent();
   }
 
+  // Save all changes
   Future<void> _saveContent() async {
     try {
       final mediaIds = media.map((m) => m['mediaId']).toList();
@@ -88,7 +91,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 'color': textData.color.value,
                 'position': {
                   'dx': textData.position.dx,
-                  'dy': textData.position.dy
+                  'dy': textData.position.dy,
                 },
               })
           .toList();
@@ -100,16 +103,31 @@ class _A4WhitePageState extends State<A4WhitePage> {
         data: {
           'backgroundColor': backgroundColor.value,
           'mediaIds': mediaIds,
-          'textData': textDataJson, // Save text data
+          'textData': textDataJson,
+          'doodlePoints': doodlePoints
+              .map((point) => {'dx': point.dx, 'dy': point.dy})
+              .toList(),
           'folderId': widget.folderId,
           'userId': widget.userId,
         },
       );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Content saved successfully!')),
+        );
+      }
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving content: ${e.toString()}')),
+        );
+      }
       print('Error saving content: $e');
     }
   }
 
+  // Load saved content
   Future<void> _loadSavedContent() async {
     try {
       final doc = await databases.getDocument(
@@ -117,74 +135,127 @@ class _A4WhitePageState extends State<A4WhitePage> {
         collectionId: '67cbeccb00382aae9f27',
         documentId: widget.pageId,
       );
-      backgroundColor =
-          Color(doc.data['backgroundColor'] ?? Colors.white.value);
-      List<String> mediaIds = List<String>.from(doc.data['mediaIds'] ?? []);
-      List<Map<String, dynamic>> mediaData = [];
-      for (String mediaId in mediaIds) {
-        final mediaDoc = await databases.getDocument(
-          databaseId: '67c32fc700070ceeadac',
-          collectionId: '67cd34960000649f059d',
-          documentId: mediaId,
-        );
-        mediaData.add(mediaDoc.data);
-      }
+      if (!mounted) return; // Check if the widget is still mounted
 
-      // Load text data
-      List<TextData> loadedTextData = [];
-      if (doc.data['textData'] != null) {
-        for (var textJson in doc.data['textData']) {
-          loadedTextData.add(TextData(
-            text: textJson['text'],
-            font: textJson['font'],
-            color: Color(textJson['color']),
-            position:
-                Offset(textJson['position']['dx'], textJson['position']['dy']),
-          ));
+      setState(() async {
+        backgroundColor =
+            Color(doc.data['backgroundColor'] ?? Colors.white.value);
+        List<String> mediaIds = List<String>.from(doc.data['mediaIds'] ?? []);
+        List<Map<String, dynamic>> mediaData = [];
+        for (String mediaId in mediaIds) {
+          final mediaDoc = await databases.getDocument(
+            databaseId: '67c32fc700070ceeadac',
+            collectionId: '67cd34960000649f059d',
+            documentId: mediaId,
+          );
+          mediaData.add(mediaDoc.data);
         }
-      }
 
-      setState(() {
+        // Load text data
+        List<TextData> loadedTextData = [];
+        if (doc.data['textData'] != null) {
+          for (var textJson in doc.data['textData']) {
+            loadedTextData.add(TextData(
+              text: textJson['text'],
+              font: textJson['font'],
+              color: Color(textJson['color']),
+              position: Offset(
+                  textJson['position']['dx'], textJson['position']['dy']),
+            ));
+          }
+        }
+
+        // Load doodle points
+        List<Offset> loadedDoodlePoints = [];
+        if (doc.data['doodlePoints'] != null) {
+          for (var point in doc.data['doodlePoints']) {
+            loadedDoodlePoints.add(Offset(point['dx'], point['dy']));
+          }
+        }
+
         media = mediaData;
-        textDataList = loadedTextData; // Update textDataList
+        textDataList = loadedTextData;
+        doodlePoints = loadedDoodlePoints;
       });
     } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('No saved content found: $e')),
+        );
+      }
       print('No saved content found: $e');
     }
   }
 
+  // Add media (image or video)
   Future<void> _addMedia(String type) async {
     final XFile? file;
-    if (type == 'image') {
-      file = await _picker.pickImage(source: ImageSource.gallery);
-    } else if (type == 'video') {
-      file = await _picker.pickVideo(source: ImageSource.gallery);
-    } else {
-      return;
-    }
-    if (file != null) {
-      setState(() {
-        media.add({'type': type, 'value': file?.path});
-      });
+    try {
+      if (type == 'image') {
+        file = await _picker.pickImage(source: ImageSource.gallery);
+      } else if (type == 'video') {
+        file = await _picker.pickVideo(source: ImageSource.gallery);
+      } else {
+        return;
+      }
+      if (file != null && mounted) {
+        if (kIsWeb) {
+          // Convert file to data URL for web
+          final bytes = await file.readAsBytes();
+          final base64Image = base64Encode(bytes);
+          final imageUrl = "data:image/png;base64,$base64Image";
+
+          setState(() {
+            media.add({
+              'type': type,
+              'value': imageUrl, // Use the data URL for web
+            });
+          });
+        } else {
+          setState(() {
+            media.add({
+              'type': type,
+              'value': file!.path, // Use the file path for mobile
+            });
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load media: ${e.toString()}')),
+        );
+      }
     }
   }
 
-  void _playAudioFromVideoId(String videoId) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => AudioPlayerScreen(videoId: videoId),
-      ),
-    );
-  }
-
+  // Play audio from URL
   void _playAudioFromUrl(String url) {
-    _audioPlayer.play(UrlSource(url));
     setState(() {
       _audioUrl = url;
+      isAudioPlaying = true;
     });
+    _audioPlayer.play(UrlSource(url));
   }
 
+  // Play audio from YouTube video ID
+  void _playAudioFromVideoId(String videoId) {
+    setState(() {
+      _audioUrl = "https://www.youtube.com/watch?v=$videoId";
+      isAudioPlaying = true;
+    });
+
+    if (mounted) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AudioPlayerScreen(videoId: videoId),
+        ),
+      );
+    }
+  }
+
+  // Change background color
   void _changeBackgroundColor() {
     showDialog(
       context: context,
@@ -208,6 +279,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
+  // Show font picker
   void _showFontPicker() {
     showDialog(
       context: context,
@@ -224,7 +296,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
               onTap: () {
                 setState(() {
                   selectedFont = font;
-                  isAddingText = true; // Enable text input mode
+                  isAddingText = true;
                 });
                 Navigator.pop(context);
               },
@@ -235,6 +307,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
+  // Show text color picker
   void _showTextColorPicker() {
     showDialog(
       context: context,
@@ -258,6 +331,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
+  // Show doodle panel
   void _showDoodlePanel() {
     showModalBottomSheet(
       context: context,
@@ -276,7 +350,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                       setState(() {
                         doodleColor = color;
                       });
-                      Navigator.pop(context); // Close the panel
+                      Navigator.pop(context);
                     },
                     child: Container(
                       margin: const EdgeInsets.all(4),
@@ -304,65 +378,128 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
+  // Clear doodles
+  void _clearDoodles() {
+    setState(() {
+      doodlePoints.clear();
+    });
+  }
+
+  // Show options menu
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Wrap(
-        children: [
-          ListTile(
-            leading: const Icon(Icons.text_fields),
-            title: const Text('Text'),
-            onTap: () {
-              Navigator.pop(context);
-              _showFontPicker();
+      builder: (context) => SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.text_fields),
+              title: const Text('Text'),
+              onTap: () {
+                Navigator.pop(context);
+                _showFontPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.color_lens),
+              title: const Text('Text Color'),
+              onTap: () {
+                Navigator.pop(context);
+                _showTextColorPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.image),
+              title: const Text('Image'),
+              onTap: () {
+                Navigator.pop(context);
+                _addMedia('image');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.video_library),
+              title: const Text('Video'),
+              onTap: () {
+                Navigator.pop(context);
+                _addMedia('video');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.music_note),
+              title: const Text('Songs'),
+              onTap: () {
+                Navigator.pop(context);
+                _showAudioPicker();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.brush),
+              title: const Text('Drawing'),
+              onTap: () {
+                Navigator.pop(context);
+                _showDoodlePanel();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.format_paint),
+              title: const Text('Background Color'),
+              onTap: () {
+                Navigator.pop(context);
+                _changeBackgroundColor();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.clear),
+              title: const Text('Clear Doodles'),
+              onTap: () {
+                Navigator.pop(context);
+                _clearDoodles();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Add text at a specific position
+  void _addText(Offset position) {
+    final TextEditingController _textController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Enter Text"),
+        content: TextField(
+          controller: _textController,
+          autofocus: true,
+          maxLines: null,
+          decoration: const InputDecoration(hintText: "Type something..."),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () {
+              Navigator.pop(context); // Close the dialog without saving
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.color_lens),
-            title: const Text('Text Color'),
-            onTap: () {
-              Navigator.pop(context);
-              _showTextColorPicker();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.image),
-            title: const Text('Image'),
-            onTap: () {
-              Navigator.pop(context);
-              _addMedia('image');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.video_library),
-            title: const Text('Video'),
-            onTap: () {
-              Navigator.pop(context);
-              _addMedia('video');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.music_note),
-            title: const Text('Songs'),
-            onTap: () {
-              Navigator.pop(context);
-              _showAudioPicker();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.brush),
-            title: const Text('Drawing'),
-            onTap: () {
-              Navigator.pop(context);
-              _showDoodlePanel();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.format_paint),
-            title: const Text('Background Color'),
-            onTap: () {
-              Navigator.pop(context);
-              _changeBackgroundColor();
+          TextButton(
+            child: const Text("OK"),
+            onPressed: () {
+              final text = _textController.text.trim();
+              if (text.isNotEmpty) {
+                setState(() {
+                  textDataList.add(TextData(
+                    text: text,
+                    font: selectedFont,
+                    color: selectedTextColor,
+                    position: position,
+                  ));
+                  isAddingText = false;
+                });
+              }
+              Navigator.pop(context); // Close the dialog
             },
           ),
         ],
@@ -370,34 +507,12 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  void _addText(Offset position) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Enter Text"),
-        content: TextField(
-          autofocus: true,
-          decoration: const InputDecoration(hintText: "Type something..."),
-          onSubmitted: (text) {
-            setState(() {
-              textDataList.add(TextData(
-                text: text,
-                font: selectedFont,
-                color: selectedTextColor,
-                position: position,
-              ));
-              isAddingText = false; // Disable text input mode
-            });
-            Navigator.pop(context);
-          },
-        ),
-      ),
-    );
-  }
-
+  // Show audio picker
   void _showAudioPicker() async {
     final TextEditingController _searchController = TextEditingController();
     List<Map<String, dynamic>> _searchResults = [];
+
+    if (!mounted) return; // Ensure the widget is still mounted
 
     await showDialog(
       context: context,
@@ -411,7 +526,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
               decoration:
                   const InputDecoration(hintText: "Search for a song..."),
               onChanged: (query) async {
-                if (query.isNotEmpty) {
+                if (query.isNotEmpty && mounted) {
                   _searchResults = await YouTubeAPI.searchVideos(query);
                   setState(() {});
                 }
@@ -427,9 +542,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
                     title: Text(video['snippet']['title']),
                     subtitle: Text(video['snippet']['channelTitle']),
                     onTap: () {
-                      Navigator.pop(context);
-                      _playAudioFromVideoId(
-                          video['id']['videoId']); // Use _playAudioFromVideoId
+                      if (mounted) {
+                        Navigator.pop(context);
+                        _playAudioFromVideoId(video['id']['videoId']);
+                      }
                     },
                   );
                 },
@@ -442,11 +558,18 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.pageName),
         backgroundColor: Colors.redAccent,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.save),
+            onPressed: _saveContent,
+          ),
+        ],
       ),
       body: GestureDetector(
         onPanUpdate: (details) {
@@ -458,6 +581,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
           setState(() {
             doodlePoints.add(Offset.infinite);
           });
+        },
+        onTap: () {
+          if (isAddingText) {
+            _addText(textPosition ?? Offset.zero);
+          }
         },
         child: Stack(
           children: [
@@ -476,19 +604,53 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 ),
               );
             }).toList(),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                return CustomPaint(
-                  size: Size(constraints.maxWidth,
-                      constraints.maxHeight), // Use parent constraints
-                  painter: DoodlePainter(
-                    points: doodlePoints,
-                    color: doodleColor,
-                    strokeWidth: doodleStrokeWidth,
-                  ),
-                );
-              },
+            ...media.map((mediaItem) {
+              if (mediaItem['type'] == 'image') {
+                if (kIsWeb) {
+                  // Use Image.network for web
+                  return Positioned(
+                    left: 50,
+                    top: 50,
+                    child: Image.network(
+                      mediaItem['value'], // Use the file path directly
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  );
+                } else {
+                  // Use Image.file for mobile
+                  return Positioned(
+                    left: 50,
+                    top: 50,
+                    child: Image.file(
+                      File(mediaItem['value']),
+                      width: 100,
+                      height: 100,
+                      fit: BoxFit.cover,
+                    ),
+                  );
+                }
+              }
+              return const SizedBox.shrink();
+            }).toList(),
+            RepaintBoundary(
+              child: DoodleCanvas(
+                points: doodlePoints,
+                color: doodleColor,
+                strokeWidth: doodleStrokeWidth,
+              ),
             ),
+            if (isAudioPlaying)
+              Positioned(
+                bottom: 16,
+                left: 16,
+                right: 16,
+                child: AudioPlayerWidget(
+                  audioPlayer: _audioPlayer,
+                  audioUrl: _audioUrl,
+                ),
+              ),
           ],
         ),
       ),
@@ -498,6 +660,83 @@ class _A4WhitePageState extends State<A4WhitePage> {
         child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+    );
+  }
+}
+
+class AudioPlayerWidget extends StatelessWidget {
+  final AudioPlayer audioPlayer;
+  final String? audioUrl;
+
+  const AudioPlayerWidget({
+    Key? key,
+    required this.audioPlayer,
+    this.audioUrl,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        if (audioUrl != null)
+          Text(
+            "Now Playing: ${audioUrl!.split('/').last}",
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.play_arrow),
+              onPressed: () {
+                if (audioUrl != null) {
+                  audioPlayer.play(UrlSource(audioUrl!));
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.pause),
+              onPressed: () {
+                audioPlayer.pause();
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.stop),
+              onPressed: () {
+                audioPlayer.stop();
+              },
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class DoodleCanvas extends StatelessWidget {
+  final List<Offset> points;
+  final Color color;
+  final double strokeWidth;
+
+  const DoodleCanvas({
+    required this.points,
+    required this.color,
+    required this.strokeWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return CustomPaint(
+          size: Size(constraints.maxWidth, constraints.maxHeight),
+          painter: DoodlePainter(
+            points: points,
+            color: color,
+            strokeWidth: strokeWidth,
+          ),
+        );
+      },
     );
   }
 }
