@@ -4,6 +4,7 @@ import 'package:appwrite/models.dart' as models;
 import 'create_folder.dart';
 import 'folder.dart';
 import 'dart:io';
+import 'world_map_page.dart'; // Import the new WorldMapPage
 
 class HomePage extends StatefulWidget {
   final Client client;
@@ -146,15 +147,23 @@ class _HomePageState extends State<HomePage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('👤 ${widget.fullName}'),
-                Text('📧 ${widget.userId}', style: TextStyle(fontSize: 12)),
+                Text(
+                  '👤 ${widget.fullName}',
+                  style: const TextStyle(fontFamily: 'JosefinSans'),
+                ),
+                Text(
+                  '📧 ${widget.userId}',
+                  style:
+                      const TextStyle(fontSize: 12, fontFamily: 'JosefinSans'),
+                ),
               ],
             ),
             TextButton(
               onPressed: _signOut,
               child: const Text(
                 'Sign Out',
-                style: TextStyle(color: Colors.white),
+                style:
+                    TextStyle(color: Colors.white, fontFamily: 'JosefinSans'),
               ),
             ),
           ],
@@ -198,6 +207,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       '👋 Welcome, ${widget.fullName}!',
                       style: const TextStyle(
+                        fontFamily: 'JosefinSans',
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -219,8 +229,11 @@ class _HomePageState extends State<HomePage> {
                     ? const Center(
                         child: Text(
                           'No folders available.',
-                          style:
-                              TextStyle(fontSize: 18, color: Color(0xFF2C7DA0)),
+                          style: TextStyle(
+                            fontFamily: 'JosefinSans',
+                            fontSize: 18,
+                            color: Color(0xFF2C7DA0),
+                          ),
                         ),
                       )
                     : ListView.builder(
@@ -264,6 +277,7 @@ class _HomePageState extends State<HomePage> {
                                     Text(
                                       folder['name'],
                                       style: const TextStyle(
+                                        fontFamily: 'JosefinSans',
                                         fontSize: 18,
                                         fontWeight: FontWeight.w500,
                                         color: Color(0xFF2C7DA0),
@@ -283,6 +297,24 @@ class _HomePageState extends State<HomePage> {
                       ),
               ),
             ],
+          ),
+          // Add the map button
+          Positioned(
+            left: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => WorldMapPage(
+                        databases: databases, userId: widget.userId),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFF2C7DA0),
+              child: const Icon(Icons.map),
+            ),
           ),
         ],
       ),

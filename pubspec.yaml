@@ -50,6 +50,7 @@ dependencies:
   shared_preferences: ^2.5.2
   path_provider: ^2.0.11
   path: ^1.8.2
+  image: ^4.0.17
 
   # Networking
   http: ^1.0.0
@@ -61,10 +62,12 @@ dependencies:
 
   # Drawing
   flutter_drawing_board: ^0.9.8
+  latlong2: ^0.9.0
 
   # Internationalization
   intl: ^0.20.2
-
+  flutter_typeahead: ^4.1.0  
+  flutter_map: ^8.1.1
 
 
 dev_dependencies:
@@ -90,6 +93,13 @@ flutter:
     - assets/google.png
     - assets/homepage.jpg
   fonts:
+    - family: Schoolbell
+      fonts:
+         - asset: fonts/Schoolbell-Regular.ttf
+    - family: JosefinSans
+      fonts:
+        - asset: fonts/JosefinSans-Regular.ttf
+  
     - family: Merriweather
       fonts:
         - asset: fonts/Merriweather-LightItalic.ttf
