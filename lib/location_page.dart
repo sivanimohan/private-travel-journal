@@ -5,15 +5,15 @@ import 'dart:convert';
 import 'package:appwrite/appwrite.dart';
 
 class LocationPage extends StatefulWidget {
-  final List<String> existingLocations;
   final String userId;
   final Databases databases;
+  final List<String> existingLocations;
 
   const LocationPage({
     super.key,
-    this.existingLocations = const [],
     required this.userId,
     required this.databases,
+    this.existingLocations = const [],
   });
 
   @override
@@ -30,7 +30,8 @@ class _LocationPageState extends State<LocationPage> {
   @override
   void initState() {
     super.initState();
-    locations = List.from(widget.existingLocations);
+    locations = List.from(
+        widget.existingLocations); // Initialize with existing locations
   }
 
   Future<List<Map<String, dynamic>>> fetchSuggestions(String query) async {
@@ -52,10 +53,10 @@ class _LocationPageState extends State<LocationPage> {
           };
         }).toList();
       }
-      return [];
     } catch (e) {
-      return [];
+      print("Error fetching locations: $e");
     }
+    return [];
   }
 
   void _addLocation(Map<String, dynamic> location) {
@@ -68,18 +69,16 @@ class _LocationPageState extends State<LocationPage> {
   }
 
   Future<void> _saveLocationToDatabase() async {
-    setState(() {
-      isSaving = true;
-    });
+    if (locations.isEmpty) return;
+
+    setState(() => isSaving = true);
 
     try {
       await widget.databases.updateDocument(
         databaseId: '67c32fc700070ceeadac',
         collectionId: '67cbeccb00382aae9f27',
-        documentId: widget.userId,
-        data: {
-          'locations': locations,
-        },
+        documentId: widget.userId, // Ensure this is a valid document ID
+        data: {'locations': locations},
       );
 
       if (mounted) {
@@ -92,11 +91,7 @@ class _LocationPageState extends State<LocationPage> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          isSaving = false;
-        });
-      }
+      if (mounted) setState(() => isSaving = false);
     }
   }
 
@@ -114,21 +109,15 @@ class _LocationPageState extends State<LocationPage> {
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
-                  color: Colors.white,
-                  strokeWidth: 2,
-                ),
+                    color: Colors.white, strokeWidth: 2),
               ),
             )
           else
             TextButton(
               onPressed: _saveLocationToDatabase,
-              child: const Text(
-                'Save',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              child: const Text('Save',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
             ),
         ],
       ),
@@ -153,16 +142,11 @@ class _LocationPageState extends State<LocationPage> {
               itemBuilder: (context, suggestion) {
                 return ListTile(
                   leading: const Icon(Icons.location_on),
-                  title: Text(
-                    suggestion['displayName'],
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  title: Text(suggestion['displayName'],
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                 );
               },
-              onSuggestionSelected: (suggestion) {
-                _addLocation(suggestion);
-              },
+              onSuggestionSelected: _addLocation,
               noItemsFoundBuilder: (context) => const Padding(
                 padding: EdgeInsets.all(16.0),
                 child: Text("No locations found."),
@@ -176,12 +160,8 @@ class _LocationPageState extends State<LocationPage> {
                     children: [
                       const ListTile(
                         leading: Icon(Icons.place),
-                        title: Text(
-                          'Selected Locations',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
+                        title: Text('Selected Locations',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                       Expanded(
                         child: ListView.builder(
@@ -193,9 +173,7 @@ class _LocationPageState extends State<LocationPage> {
                                 icon:
                                     const Icon(Icons.delete, color: Colors.red),
                                 onPressed: () {
-                                  setState(() {
-                                    locations.removeAt(index);
-                                  });
+                                  setState(() => locations.removeAt(index));
                                 },
                               ),
                             );
@@ -205,14 +183,12 @@ class _LocationPageState extends State<LocationPage> {
                     ],
                   ),
                 ),
-              ),
-            if (locations.isEmpty)
+              )
+            else
               const Expanded(
                 child: Center(
-                  child: Text(
-                    'Search and select locations above',
-                    style: TextStyle(color: Colors.grey),
-                  ),
+                  child: Text('Search and select locations above',
+                      style: TextStyle(color: Colors.grey)),
                 ),
               ),
           ],

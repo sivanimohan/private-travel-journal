@@ -2,13 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:video_player/video_player.dart';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-import 'dart:io';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:flutter/foundation.dart'; // Add this import
+import 'audio_page.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'dart:math';
+
+final String bucketId =
+    '67cd36510039f3d96c62'; // Add this near the top of your file
 
 class A4WhitePage extends StatefulWidget {
   final String pageId;
@@ -37,21 +39,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
   late Databases databases;
   late Storage storage;
   final ImagePicker _picker = ImagePicker();
-  VideoPlayerController? _videoController;
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  String? _audioUrl;
+
+  late YoutubePlayerController _ytController;
+  final ValueNotifier<double> _volumeNotifier = ValueNotifier<double>(50);
   bool isAudioPlaying = false;
 
-  // New state variables for additional features
-  String selectedFont = 'Delius Swash Caps';
-  Color selectedTextColor = Colors.black;
-
-  // Text input feature
+  // Text input
   List<TextData> textDataList = [];
   bool isAddingText = false;
-  Offset? textPosition;
-
-  // Font and color options
+  String selectedFont = 'Delius Swash Caps';
+  Color selectedTextColor = Colors.black;
   List<String> fonts = [
     'Delius Swash Caps',
     'Delicious Handrawn',
@@ -60,212 +57,389 @@ class _A4WhitePageState extends State<A4WhitePage> {
     'Indie Flower',
   ];
 
-  List<Color> colors = [
-    Colors.black,
-    Colors.red,
-    Colors.blue,
-    Colors.green,
-    Colors.yellow,
-    Colors.purple,
-    Colors.orange,
-  ];
-
   @override
   void initState() {
     super.initState();
     databases = Databases(widget.client);
     storage = Storage(widget.client);
     _loadSavedContent();
+    textDataList = [];
   }
 
-  // Save all changes to Appwrite database
-  Future<void> _saveContent() async {
-    try {
-      // Prepare data to save
-      final mediaData = media.map((m) {
-        final position = m['position']; // Get the position data
+  @override
+  void dispose() {
+    _ytController.dispose();
+    _volumeNotifier.dispose();
+    super.dispose();
+  }
 
-        double dx = 0.0; // Default values to prevent null errors
-        double dy = 0.0;
+  Future<void> _addAudio() async {
+    final videoId = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const AudioPage()),
+    );
 
-        if (position is Offset) {
-          dx = position.dx;
-          dy = position.dy;
-        } else if (position is Map<String, dynamic>) {
-          dx = position['dx']?.toDouble() ?? 0.0;
-          dy = position['dy']?.toDouble() ?? 0.0;
-        }
-
-        return {
-          'type': m['type'],
-          'fileId': m['fileId'],
-          'position': {'dx': dx, 'dy': dy},
-        };
-      }).toList();
-
-      // Serialize textData into a JSON string
-      final textDataJson = jsonEncode(textDataList
-          .map((textData) => {
-                'text': textData.text,
-                'font': textData.font,
-                'color': textData.color.value,
-                'position': {
-                  'dx': textData.position.dx,
-                  'dy': textData.position.dy,
-                },
-              })
-          .toList());
-
-      // Update the document in Appwrite database
-      await databases.updateDocument(
-        databaseId: '67c32fc700070ceeadac', // Your database ID
-        collectionId: '67cbeccb00382aae9f27', // Your collection ID
-        documentId: widget.pageId,
-        data: {
-          'backgroundColor': backgroundColor.value,
-          'media': mediaData,
-          'textData': textDataJson,
-          'folderId': widget.folderId,
-          'userId': widget.userId,
-          'locations': selectedLocation, // Save the location
-        },
-      );
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Content saved successfully!')),
-        );
-      }
-    } catch (e) {
-      // Show error message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving content: ${e.toString()}')),
-        );
-      }
-      print('Error saving content: $e');
+    if (videoId != null && mounted) {
+      _playAudio(videoId);
     }
   }
 
-  // Load saved content from Appwrite database
+  Future<void> _playAudio(String videoId) async {
+    try {
+      _ytController = YoutubePlayerController(
+        initialVideoId: videoId,
+        flags: const YoutubePlayerFlags(
+          autoPlay: true,
+          mute: false,
+          hideControls: true,
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          isAudioPlaying = true;
+        });
+        _ytController.setVolume(_volumeNotifier.value.round());
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error initializing player: $e')),
+        );
+      }
+    }
+  }
+
+  String _generateShortHash(String input) {
+    // Create a quick hash from the input string
+    final hash = input.hashCode;
+
+    // Convert to a base36 string (0-9a-z) for compact representation
+    final base36 = hash.toRadixString(36);
+
+    // Take the last 6 characters (or full string if shorter)
+    return base36.length <= 6 ? base36 : base36.substring(base36.length - 6);
+  }
+
+  Future<void> _saveContent() async {
+    try {
+      // Prepare text data for saving in compact format
+      final textDataToSave = textDataList
+          .map((text) => [
+                text.text,
+                text.font,
+                text.color.value,
+                text.position.dx.toInt(),
+                text.position.dy.toInt(),
+              ])
+          .toList();
+
+      final documentData = {
+        'pageId': widget.pageId,
+        'userId': widget.userId,
+        'folderId': widget.folderId,
+        'pageName': widget.pageName,
+        'backgroundColor': backgroundColor.value,
+        'media': media.map((m) => m['fileId'] ?? '').toList(),
+        'textData': jsonEncode(textDataToSave), // Save as JSON string
+        'location': selectedLocation ?? '',
+        'updatedAt': DateTime.now().toIso8601String(),
+      };
+
+      await databases.updateDocument(
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbeccb00382aae9f27',
+        documentId: widget.pageId,
+        data: documentData,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Saved successfully!')),
+        );
+      }
+    } catch (e) {
+      debugPrint('Save error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e')),
+        );
+      }
+    }
+  }
+
+// Safe string truncation helper
+  String _safeTruncate(String input, int maxLength) {
+    if (input.length <= maxLength) return input;
+    return input.substring(0, maxLength);
+  }
+
+// Modified text compression to prevent errors
+  String _compressTextData(List<TextData> texts) {
+    final compressed = texts
+        .map((t) => [
+              _safeTruncate(t.text, 20),
+              t.font.isNotEmpty ? t.font.substring(0, 1) : '',
+              t.color.value,
+              t.position.dx.toInt(),
+              t.position.dy.toInt(),
+            ])
+        .toList();
+    return jsonEncode(compressed);
+  }
+
   Future<void> _loadSavedContent() async {
     try {
       final doc = await databases.getDocument(
-        databaseId: '67c32fc700070ceeadac', // Your database ID
-        collectionId: '67cbeccb00382aae9f27', // Your collection ID
+        databaseId: '67c32fc700070ceeadac',
+        collectionId: '67cbeccb00382aae9f27',
         documentId: widget.pageId,
       );
 
+      final data = doc.data;
+
       setState(() {
-        backgroundColor =
-            Color(doc.data['backgroundColor'] ?? Colors.white.value);
-        media = List<Map<String, dynamic>>.from(doc.data['media'] ?? [])
-            .map((mediaItem) {
+        backgroundColor = _parseBackgroundColor(data['backgroundColor']);
+        selectedLocation = _parseLocation(data);
+
+        // Initialize textDataList as empty list first
+        textDataList = [];
+
+        // Load text data - handle both string and direct list formats
+        if (data['textData'] != null) {
+          try {
+            if (data['textData'] is String) {
+              // Parse from JSON string
+              final decoded = jsonDecode(data['textData'] as String) as List;
+              textDataList = decoded.map((item) {
+                return TextData(
+                  text: item[0]?.toString() ?? '',
+                  font: item[1]?.toString() ?? fonts.first,
+                  color: Color(item[2] is int ? item[2] : Colors.black.value),
+                  position: Offset(
+                    (item[3] ?? 50).toDouble(),
+                    (item[4] ?? 50).toDouble(),
+                  ),
+                );
+              }).toList();
+            } else if (data['textData'] is List) {
+              // Parse from direct list
+              textDataList = (data['textData'] as List).map((item) {
+                if (item is Map) {
+                  return TextData.fromJson(Map<String, dynamic>.from(item));
+                }
+                return TextData(
+                  text: '',
+                  font: fonts.first,
+                  color: Colors.black,
+                  position: Offset.zero,
+                );
+              }).toList();
+            }
+          } catch (e) {
+            debugPrint('Error parsing text data: $e');
+          }
+        }
+
+        // Load media
+        media =
+            (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
           return {
-            'type': mediaItem['type'],
-            'fileId': mediaItem['fileId'],
-            'value': mediaItem['value'], // Use 'value' for web or mobile
-            'position': mediaItem['position'] != null
-                ? Offset(mediaItem['position']['dx'] ?? 50,
-                    mediaItem['position']['dy'] ?? 50)
-                : const Offset(
-                    50, 50), // Initialize position with a default value if null
+            'type': 'image',
+            'fileId': item is String ? item : '',
+            'position': const Offset(50, 50),
+            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
+            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
           };
         }).toList();
-        textDataList =
-            (jsonDecode(doc.data['textData'] ?? '[]') as List).map((textJson) {
-          return TextData(
-            text: textJson['text'],
-            font: textJson['font'],
-            color: Color(textJson['color']),
-            position:
-                Offset(textJson['position']['dx'], textJson['position']['dy']),
-          );
-        }).toList();
-        selectedLocation = doc.data['locations']; // Load the location
       });
 
-      // Fetch image URLs from storage for non-web platforms
-      if (!kIsWeb) {
-        for (var mediaItem in media) {
-          if (mediaItem['type'] == 'image') {
-            final fileId = mediaItem['fileId'];
-            final fileUrl = await storage.getFileView(
-              bucketId: '67cd36510039f3d96c62', // Replace with your bucket ID
-              fileId: fileId,
-            );
-            mediaItem['url'] = fileUrl; // Store the URL for display
+      await _loadMediaData();
+    } catch (e) {
+      debugPrint('Error loading content: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading content: $e')),
+        );
+      }
+    }
+  }
+
+  Widget _buildAudioPlayer() {
+    return Positioned(
+      bottom: 16,
+      left: 16,
+      right: 16,
+      child: Card(
+        elevation: 4,
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            children: [
+              Opacity(
+                opacity: 0,
+                child: SizedBox(
+                  height: 1,
+                  child: YoutubePlayer(
+                    controller: _ytController,
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  IconButton(
+                    icon: Icon(_ytController.value.isPlaying
+                        ? Icons.pause
+                        : Icons.play_arrow),
+                    onPressed: _ytController.value.isPlaying
+                        ? _ytController.pause
+                        : _ytController.play,
+                  ),
+                  Expanded(
+                    child: ValueListenableBuilder<double>(
+                      valueListenable: _volumeNotifier,
+                      builder: (context, volume, _) {
+                        return Slider(
+                          value: volume,
+                          min: 0,
+                          max: 100,
+                          onChanged: (value) {
+                            _volumeNotifier.value = value;
+                            _ytController.setVolume(value.round());
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  ValueListenableBuilder<double>(
+                    valueListenable: _volumeNotifier,
+                    builder: (context, volume, _) {
+                      return Text('${volume.round()}%');
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _loadMediaData() async {
+    try {
+      for (int i = 0; i < media.length; i++) {
+        final item = media[i];
+        if (item['fileId'] != null && item['value'] == null) {
+          try {
+            if (kIsWeb) {
+              // For web, we get Uint8List directly
+              final response = await storage.getFileView(
+                bucketId: bucketId,
+                fileId: item['fileId'],
+              );
+
+              // Get file extension from metadata
+              final file = await storage.getFile(
+                bucketId: bucketId,
+                fileId: item['fileId'],
+              );
+              final mimeType = _getMimeType(file.name);
+              media[i]['value'] =
+                  "data:$mimeType;base64,${base64Encode(response)}";
+            } else {
+              // For mobile, we can get the download URL
+              final url = await storage.getFileDownload(
+                bucketId: bucketId,
+                fileId: item['fileId'],
+              );
+              media[i]['value'] = url.toString();
+            }
+          } catch (e) {
+            debugPrint('Error loading file ${item['fileId']}: $e');
+            media[i]['hasError'] = true;
           }
         }
       }
+      setState(() {});
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('No saved content found: $e')),
-        );
-      }
-      print('No saved content found: $e');
+      debugPrint('Error in _loadMediaData: $e');
     }
   }
 
-  Future<void> _showLocationPicker() async {
-    final selectedLocation = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => LocationPage()),
-    );
-
-    if (selectedLocation != null && mounted) {
-      setState(() {
-        this.selectedLocation = selectedLocation['address']; // Update location
-      });
+  String _getMimeType(String filename) {
+    final ext = filename.split('.').last.toLowerCase();
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
     }
   }
 
-  // Add media (image or video)
   Future<void> _addMedia(String type) async {
-    final XFile? file;
     try {
-      if (type == 'image') {
-        file = await _picker.pickImage(source: ImageSource.gallery);
-      } else if (type == 'video') {
-        file = await _picker.pickVideo(source: ImageSource.gallery);
-      } else {
-        return;
-      }
-      if (file != null && mounted) {
-        if (kIsWeb) {
-          // Convert file to data URL for web
-          final bytes = await file.readAsBytes();
-          final base64Image = base64Encode(bytes);
-          final imageUrl = "data:image/png;base64,$base64Image";
+      final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
+      if (file == null || !mounted) return;
 
-          setState(() {
-            media.add({
-              'type': type,
-              'value': imageUrl, // Use the data URL for web
-            });
+      final bytes = await file.readAsBytes();
+      final fileName = file.name;
+
+      // Upload to Appwrite Storage
+      final uploadedFile = await storage.createFile(
+        bucketId: bucketId,
+        fileId: ID.unique(),
+        file: InputFile.fromBytes(
+          bytes: bytes,
+          filename: fileName,
+        ), // Removed mimeType parameter
+      );
+
+      // For web, create data URL immediately
+      if (kIsWeb) {
+        final mimeType = _getMimeType(fileName);
+        setState(() {
+          media.add({
+            'type': type,
+            'fileId': uploadedFile.$id,
+            'value': "data:$mimeType;base64,${base64Encode(bytes)}",
+            'position': const Offset(50, 50),
+            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
+            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
           });
-        } else {
-          setState(() {
-            media.add({
-              'type': type,
-              'value': file!.path, // Use the file path for mobile
-            });
+        });
+      } else {
+        // For mobile, we'll load the URL when needed
+        setState(() {
+          media.add({
+            'type': type,
+            'fileId': uploadedFile.$id,
+            'position': const Offset(50, 50),
+            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
+            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
           });
-        }
+        });
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load media: ${e.toString()}')),
+          SnackBar(
+            content: Text('Failed to add media: ${e.toString()}'),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
-      print('Failed to load media: $e');
+      debugPrint('Failed to add media: $e');
     }
   }
 
-  // Add text at a specific position
   void _addText(Offset position) {
     final TextEditingController _textController = TextEditingController();
 
@@ -282,9 +456,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         actions: [
           TextButton(
             child: const Text("Cancel"),
-            onPressed: () {
-              Navigator.pop(context); // Close the dialog without saving
-            },
+            onPressed: () => Navigator.pop(context),
           ),
           TextButton(
             child: const Text("OK"),
@@ -301,7 +473,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   isAddingText = false;
                 });
               }
-              Navigator.pop(context); // Close the dialog
+              Navigator.pop(context);
             },
           ),
         ],
@@ -309,7 +481,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // Show options menu
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
@@ -322,9 +493,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
               title: const Text('Text'),
               onTap: () {
                 Navigator.pop(context);
-                setState(() {
-                  isAddingText = true;
-                });
+                setState(() => isAddingText = true);
               },
             ),
             ListTile(
@@ -344,11 +513,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.video_library),
-              title: const Text('Video'),
+              leading: const Icon(Icons.audiotrack),
+              title: const Text('Audio'),
               onTap: () {
                 Navigator.pop(context);
-                _addMedia('video');
+                _addAudio();
               },
             ),
             ListTile(
@@ -365,7 +534,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // Show text color picker
   void _showTextColorPicker() {
     showDialog(
       context: context,
@@ -373,11 +541,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         title: const Text("Choose Text Color"),
         content: BlockPicker(
           pickerColor: selectedTextColor,
-          onColorChanged: (color) {
-            setState(() {
-              selectedTextColor = color;
-            });
-          },
+          onColorChanged: (color) => setState(() => selectedTextColor = color),
         ),
         actions: [
           TextButton(
@@ -389,7 +553,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // Change background color
   void _changeBackgroundColor() {
     showDialog(
       context: context,
@@ -397,11 +560,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         title: const Text("Choose Background Color"),
         content: BlockPicker(
           pickerColor: backgroundColor,
-          onColorChanged: (color) {
-            setState(() {
-              backgroundColor = color;
-            });
-          },
+          onColorChanged: (color) => setState(() => backgroundColor = color),
         ),
         actions: [
           TextButton(
@@ -414,104 +573,242 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            Text(widget.pageName ??
-                'Untitled'), // Display page name or 'Untitled' if null
-            const Spacer(),
-            if (selectedLocation !=
-                null) // Display the selected location if it exists
-              Text(
-                'Location: $selectedLocation',
-                style: const TextStyle(fontSize: 16),
+            Text(widget.pageName, overflow: TextOverflow.ellipsis),
+            if (selectedLocation != null && !isMobile)
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Text('Location: $selectedLocation',
+                    style: const TextStyle(fontSize: 14)),
               ),
           ],
         ),
-        backgroundColor: Colors.blue,
         actions: [
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _saveContent, // Save content when the button is pressed
+            onPressed: _saveContent,
+            tooltip: 'Save',
           ),
           IconButton(
             icon: const Icon(Icons.location_on),
-            onPressed: _showLocationPicker, // Open the location picker
+            onPressed: () async {
+              final location = await Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => LocationPage()),
+              );
+              if (location != null && mounted) {
+                setState(() => selectedLocation = location['address']);
+              }
+            },
+            tooltip: 'Location',
           ),
         ],
       ),
       body: GestureDetector(
         onTap: () {
           if (isAddingText) {
-            _addText(textPosition ?? Offset.zero);
+            final renderBox = context.findRenderObject() as RenderBox;
+            final tapPosition = renderBox.globalToLocal(
+              (context.findRenderObject() as RenderBox)
+                  .localToGlobal(Offset.zero),
+            );
+            _addText(tapPosition);
           }
         },
         child: Stack(
           children: [
-            Container(
-                color: backgroundColor ??
-                    Colors.white), // Fallback to white if null
-            ...textDataList.map((textData) {
-              return Positioned(
-                left: textData.position.dx,
-                top: textData.position.dy,
-                child: Text(
-                  textData.text ?? '', // Fallback to empty string if null
-                  style: TextStyle(
-                    fontFamily:
-                        textData.font ?? 'JosefinSans', // Fallback font if null
-                    color: textData.color ??
-                        Colors.black, // Fallback color if null
-                    fontSize: 24,
-                  ),
-                ),
-              );
-            }).toList(),
-            ...media.map((mediaItem) {
-              if (mediaItem['type'] == 'image') {
-                return Positioned(
-                  left:
-                      mediaItem['position']?.dx ?? 50, // Safely access position
-                  top:
-                      mediaItem['position']?.dy ?? 50, // Safely access position
-                  child: Image.network(
-                    mediaItem['value'] ??
-                        '', // Fallback to empty string if null
-                    width: 300, // Fixed width
-                    height: 400, // Fixed height
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      print('Error loading image: $error');
-                      return const Icon(Icons
-                          .error); // Show error icon if image fails to load
-                    },
-                  ),
-                );
-              }
-              return const SizedBox
-                  .shrink(); // Return an empty widget for non-image media
-            }).toList(),
-            if (isAudioPlaying)
-              Positioned(
-                bottom: 16,
-                left: 16,
-                right: 16,
-                child: AudioPlayerWidget(
-                  audioPlayer: _audioPlayer,
-                  audioUrl: _audioUrl,
-                ),
-              ),
+            Container(color: backgroundColor),
+
+            // Stack all draggable elements
+            ..._buildDraggableElements(isMobile),
+
+            if (isAudioPlaying) _buildAudioPlayer(),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        mini: true,
+        mini: isMobile,
         onPressed: _showOptionsMenu,
         child: const Icon(Icons.add),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
+    );
+  }
+
+  // New method to build all draggable elements
+  List<Widget> _buildDraggableElements(bool isMobile) {
+    final elements = <Widget>[];
+    double verticalOffset = 20.0; // Initial vertical position
+
+    // Add text elements
+    for (var textData in textDataList) {
+      elements.add(
+        Positioned(
+          left: textData.position.dx,
+          top: textData.position.dy,
+          child: Draggable(
+            feedback: Material(
+              child: Text(
+                textData.text,
+                style: TextStyle(
+                  fontFamily: textData.font,
+                  color: textData.color,
+                  fontSize: isMobile ? 18 : 24,
+                ),
+              ),
+            ),
+            childWhenDragging: Container(),
+            onDragEnd: (details) {
+              setState(() {
+                textData.position = details.offset;
+              });
+            },
+            child: GestureDetector(
+              onLongPress: () => _showTextOptions(textData),
+              child: Text(
+                textData.text,
+                style: TextStyle(
+                  fontFamily: textData.font,
+                  color: textData.color,
+                  fontSize: isMobile ? 18 : 24,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      verticalOffset += 30; // Space between elements
+    }
+
+    // Add image elements
+    for (int i = 0; i < media.length; i++) {
+      final mediaItem = media[i];
+      elements.add(
+        Positioned(
+          left: mediaItem['position'].dx,
+          top: mediaItem['position'].dy,
+          child: DraggableImage(
+            key: ValueKey('image_${mediaItem['fileId']}_$i'),
+            mediaItem: mediaItem,
+            onPositionChanged: (updatedItem) {
+              setState(() {
+                media[i] = updatedItem;
+              });
+            },
+            onDelete: () {
+              setState(() {
+                media.removeAt(i);
+              });
+            },
+            isMobile: isMobile,
+          ),
+        ),
+      );
+      verticalOffset += mediaItem['height'] + 20; // Space after image
+    }
+
+    return elements;
+  }
+
+  // New method to show text editing options
+  void _showTextOptions(TextData textData) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.edit),
+            title: const Text('Edit Text'),
+            onTap: () {
+              Navigator.pop(context);
+              _editText(textData);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.delete),
+            title: const Text('Delete'),
+            onTap: () {
+              setState(() {
+                textDataList.remove(textData);
+              });
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.color_lens),
+            title: const Text('Change Color'),
+            onTap: () {
+              Navigator.pop(context);
+              _changeTextColor(textData);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // New method to edit existing text
+  void _editText(TextData textData) {
+    final TextEditingController _textController =
+        TextEditingController(text: textData.text);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Edit Text"),
+        content: TextField(
+          controller: _textController,
+          autofocus: true,
+          maxLines: null,
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Cancel"),
+            onPressed: () => Navigator.pop(context),
+          ),
+          TextButton(
+            child: const Text("Save"),
+            onPressed: () {
+              final newText = _textController.text.trim();
+              if (newText.isNotEmpty) {
+                setState(() {
+                  textData.text = newText;
+                });
+              }
+              Navigator.pop(context);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // New method to change text color
+  void _changeTextColor(TextData textData) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Choose Text Color"),
+        content: BlockPicker(
+          pickerColor: textData.color,
+          onColorChanged: (color) => setState(() => textData.color = color),
+        ),
+        actions: [
+          TextButton(
+            child: const Text("Done"),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -519,18 +816,12 @@ class _A4WhitePageState extends State<A4WhitePage> {
 class LocationPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    // Implement location selection logic here
-    // Return a map with the selected location's address
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Location'),
-      ),
+      appBar: AppBar(title: const Text('Select Location')),
       body: Center(
         child: ElevatedButton(
-          onPressed: () {
-            // Example: Return a mock location
-            Navigator.pop(context, {'address': '123 Main St, City, Country'});
-          },
+          onPressed: () =>
+              Navigator.pop(context, {'address': '123 Main St, City, Country'}),
           child: const Text('Select Location'),
         ),
       ),
@@ -538,12 +829,11 @@ class LocationPage extends StatelessWidget {
   }
 }
 
-// TextData class to store text-related data
 class TextData {
-  final String text;
-  final String font;
-  final Color color;
-  final Offset position;
+  String text;
+  String font;
+  Color color;
+  Offset position;
 
   TextData({
     required this.text,
@@ -551,54 +841,263 @@ class TextData {
     required this.color,
     required this.position,
   });
+
+  factory TextData.fromJson(Map<String, dynamic> json) {
+    final positionData = json['position'] is Map
+        ? Map<String, dynamic>.from(json['position'])
+        : {'dx': 50, 'dy': 50};
+
+    return TextData(
+      text: json['text']?.toString() ?? '',
+      font: json['font']?.toString() ?? 'Delius Swash Caps',
+      color: Color(json['color'] is int ? json['color'] : Colors.black.value),
+      position: Offset(
+        (positionData['dx'] ?? 50).toDouble(),
+        (positionData['dy'] ?? 50).toDouble(),
+      ),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'text': text,
+        'font': font,
+        'color': color.value,
+        'position': {'dx': position.dx, 'dy': position.dy},
+      };
+}
+// Add these methods to your _A4WhitePageState class
+
+Color _parseBackgroundColor(dynamic bgColor) {
+  if (bgColor == null) return Colors.white;
+  if (bgColor is int) return Color(bgColor);
+  if (bgColor is String) {
+    return Color(int.tryParse(bgColor) ?? Colors.white.value);
+  }
+  return Colors.white;
 }
 
-// AudioPlayerWidget class for audio playback
-class AudioPlayerWidget extends StatelessWidget {
-  final AudioPlayer audioPlayer;
-  final String? audioUrl;
+String? _parseLocation(Map<String, dynamic> data) {
+  if (data['location'] is String) return data['location'];
+  if (data['locations'] is String) return data['locations'];
+  return null;
+}
 
-  const AudioPlayerWidget({
-    Key? key,
-    required this.audioPlayer,
-    this.audioUrl,
-  }) : super(key: key);
+class DraggableImage extends StatefulWidget {
+  final Map<String, dynamic> mediaItem;
+  final Function(Map<String, dynamic>) onPositionChanged;
+  final Function() onDelete;
+  final bool isMobile;
+
+  const DraggableImage({
+    super.key,
+    required this.mediaItem,
+    required this.onPositionChanged,
+    required this.onDelete,
+    required this.isMobile,
+  });
+
+  @override
+  State<DraggableImage> createState() => _DraggableImageState();
+}
+
+class _DraggableImageState extends State<DraggableImage> {
+  bool _isHovering = false;
+  double _scale = 1.0;
+  Offset _panOffset = Offset.zero;
+  bool _isLoading = true;
+  bool _hasError = false;
+  late String _imageUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _imageUrl = widget.mediaItem['value'] ?? '';
+    _validateImageUrl();
+  }
+
+  void _validateImageUrl() {
+    if (_imageUrl.isEmpty) {
+      _hasError = true;
+      _isLoading = false;
+    } else if (!_imageUrl.startsWith('http') &&
+        !_imageUrl.startsWith('data:image')) {
+      _hasError = true;
+      _isLoading = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        if (audioUrl != null)
-          Text(
-            "Now Playing: ${audioUrl!.split('/').last}",
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+    final position = widget.mediaItem['position'] ?? const Offset(50, 50);
+    final baseWidth = widget.mediaItem['width']?.toDouble() ??
+        (widget.isMobile ? 200.0 : 300.0);
+    final baseHeight = widget.mediaItem['height']?.toDouble() ??
+        (widget.isMobile ? 266.0 : 400.0);
+
+    return Positioned(
+      left: position.dx + _panOffset.dx,
+      top: position.dy + _panOffset.dy,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _isHovering = !_isHovering),
+        onDoubleTap: _handleDoubleTap,
+        onScaleStart: _handleScaleStart,
+        onScaleUpdate: _handleScaleUpdate,
+        onScaleEnd: _handleScaleEnd,
+        child: Transform.scale(
+          scale: _scale,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: baseWidth,
+                height: baseHeight,
+                decoration: BoxDecoration(
+                  border: _isHovering
+                      ? Border.all(color: Colors.blue, width: 2)
+                      : null,
+                ),
+                child: _buildImageContent(baseWidth, baseHeight),
+              ),
+              if (_isHovering) _buildDeleteButton(),
+              if (_isLoading && !_hasError)
+                Center(child: CircularProgressIndicator()),
+            ],
           ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.play_arrow),
-              onPressed: () {
-                if (audioUrl != null) {
-                  audioPlayer.play(UrlSource(audioUrl!));
-                }
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.pause),
-              onPressed: () {
-                audioPlayer.pause();
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.stop),
-              onPressed: () {
-                audioPlayer.stop();
-              },
-            ),
-          ],
         ),
-      ],
+      ),
     );
+  }
+
+  Widget _buildImageContent(double width, double height) {
+    if (widget.mediaItem['hasError'] == true) {
+      return _buildErrorPlaceholder(width, height);
+    }
+
+    final imageUrl = widget.mediaItem['value'] ?? '';
+
+    if (imageUrl.startsWith('data:image')) {
+      try {
+        return Image.memory(
+          base64Decode(imageUrl.split(',').last),
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
+        );
+      } catch (e) {
+        return _buildErrorPlaceholder(width, height);
+      }
+    } else if (imageUrl.startsWith('http')) {
+      return Image.network(
+        imageUrl,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) return child;
+          return Center(child: CircularProgressIndicator());
+        },
+        errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
+      );
+    } else if (widget.mediaItem['fileId'] != null) {
+      // If we have a fileId but no URL yet, show loading
+      return Center(child: CircularProgressIndicator());
+    }
+
+    return _buildErrorPlaceholder(width, height);
+  }
+
+  Widget _buildDeleteButton() {
+    return Positioned(
+      right: 8,
+      top: 8,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onDelete,
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: const BoxDecoration(
+            color: Colors.red,
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.close, color: Colors.white, size: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorPlaceholder(double width, double height) {
+    return Container(
+      width: width,
+      height: height,
+      color: Colors.grey[300],
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: const [
+          Icon(Icons.broken_image, size: 40),
+          SizedBox(height: 8),
+          Text('Failed to load image', style: TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Uint8List _decodeBase64(String base64String) {
+    try {
+      final String data = base64String.split(',').last;
+      return base64.decode(data);
+    } catch (e) {
+      debugPrint('Base64 decode error: $e');
+      return Uint8List(0); // Return empty bytes to trigger error builder
+    }
+  }
+
+  void _handleDoubleTap() {
+    setState(() {
+      _scale = _scale == 1.0 ? 2.0 : 1.0;
+      _updateMediaItem();
+    });
+  }
+
+  void _handleScaleStart(ScaleStartDetails details) {
+    setState(() => _isHovering = false);
+  }
+
+  void _handleScaleUpdate(ScaleUpdateDetails details) {
+    setState(() {
+      _scale = (details.scale * _scale).clamp(0.5, 3.0);
+      _panOffset += details.focalPointDelta;
+      _updateMediaItem();
+    });
+  }
+
+  void _handleScaleEnd(ScaleEndDetails _) {
+    widget.onPositionChanged({
+      ...widget.mediaItem,
+      'position': Offset(
+        (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
+        (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
+      ),
+      'width':
+          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+              _scale,
+      'height':
+          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+              _scale,
+    });
+    _panOffset = Offset.zero;
+  }
+
+  void _updateMediaItem() {
+    widget.onPositionChanged({
+      ...widget.mediaItem,
+      'width':
+          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+              _scale,
+      'height':
+          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+              _scale,
+    });
   }
 }

@@ -40,7 +40,6 @@ dependencies:
   # Media and Files
   image_picker: ^1.1.2
   video_player: ^2.9.3
-  youtube_player_flutter: ^8.1.0
 
   # Audio Playback
   audioplayers: ^5.0.0 # Updated to support http ^1.0.0
@@ -56,6 +55,8 @@ dependencies:
   http: ^1.0.0
   appwrite: ^14.0.0
   flutter_appauth: ^8.0.3
+  
+  youtube_player_flutter: ^8.1.2
 
   # Device Information
   device_info_plus: ^10.1.2

@@ -24,7 +24,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
   @override
   void initState() {
     super.initState();
-    _fetchAndGeocodeLocations();
+    _fetchAndGeocodeLocation();
   }
 
   /// Geocoding function using Nominatim
@@ -58,17 +58,16 @@ class _WorldMapPageState extends State<WorldMapPage> {
     }
   }
 
-  /// Fetch and geocode locations
-  Future<void> _fetchAndGeocodeLocations() async {
+  /// Fetch and geocode location
+  Future<void> _fetchAndGeocodeLocation() async {
     try {
       print("🔄 Fetching document for user ID: ${widget.userId}");
 
-      // Correctly fetch the document using userId
       final documents = await widget.databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
         collectionId: '67cbeccb00382aae9f27',
         queries: [
-          Query.equal("userId", widget.userId), // ✅ Fetch using userId field
+          Query.equal("userId", widget.userId),
         ],
       );
 
@@ -81,67 +80,44 @@ class _WorldMapPageState extends State<WorldMapPage> {
         return;
       }
 
-      final document =
-          documents.documents.first; // ✅ Get the first matching document
+      final document = documents.documents.first;
       print("📄 Found Document: ${document.data}");
 
-      // Check if locations field exists
-      if (!document.data.containsKey('locations')) {
-        print("⚠️ Error: 'locations' field is missing in the document.");
+      if (!document.data.containsKey('location')) {
+        print("⚠️ Error: 'location' field is missing in the document.");
         setState(() {
-          errorMessage = "'locations' field is missing";
+          errorMessage = "'location' field is missing";
           isLoading = false;
         });
         return;
       }
 
-      // Extract the locations string
-      final locationsString = document.data['locations'] as String;
-      print("📍 Raw locations string: '$locationsString'");
+      final locationString = document.data['location'] as String;
+      print("📍 Raw location string: '$locationString'");
 
-      if (locationsString.isEmpty) {
-        print("⚠️ Locations string is empty");
+      if (locationString.isEmpty) {
+        print("⚠️ Location string is empty");
         setState(() {
-          errorMessage = "No locations entered";
+          errorMessage = "No location entered";
           isLoading = false;
         });
         return;
       }
 
-      // Split the string into individual addresses
-      final addresses = locationsString
-          .split(',')
-          .map((address) => address.trim())
-          .where((address) => address.isNotEmpty)
-          .toList();
-
-      print("🔹 Addresses to geocode: $addresses");
-
-      final geocodedLocations = <LatLng>[];
-
-      // Geocode each address with a delay to avoid rate limiting
-      for (final address in addresses) {
-        if (geocodedLocations.isNotEmpty) {
-          // Add a small delay between requests to avoid rate limiting
-          await Future.delayed(const Duration(milliseconds: 1000));
-        }
-
-        final coordinates = await geocodeWithNominatim(address);
-        if (coordinates != null) {
-          geocodedLocations.add(coordinates);
-          print("✅ Added coordinates for '$address'");
-        }
+      final coordinates = await geocodeWithNominatim(locationString);
+      if (coordinates != null) {
+        setState(() {
+          locations = [coordinates];
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          errorMessage = "No location could be found";
+          isLoading = false;
+        });
       }
-
-      setState(() {
-        locations = geocodedLocations;
-        isLoading = false;
-        if (geocodedLocations.isEmpty) {
-          errorMessage = "No locations could be found";
-        }
-      });
     } catch (e) {
-      print('❌ Error fetching and geocoding locations: $e');
+      print('❌ Error fetching and geocoding location: $e');
       setState(() {
         errorMessage = 'Error: $e';
         isLoading = false;
@@ -175,7 +151,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
                       Text(
                         errorMessage.isNotEmpty
                             ? errorMessage
-                            : "No locations found.",
+                            : "No location found.",
                         style: const TextStyle(fontSize: 18),
                       ),
                       const SizedBox(height: 24),
@@ -185,7 +161,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
                             isLoading = true;
                             errorMessage = '';
                           });
-                          _fetchAndGeocodeLocations();
+                          _fetchAndGeocodeLocation();
                         },
                         child: const Text("Retry"),
                       ),
@@ -194,9 +170,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
                 )
               : FlutterMap(
                   options: MapOptions(
-                    initialCenter: locations.isNotEmpty
-                        ? locations.first
-                        : const LatLng(51.5074, -0.1278), // Default: London
+                    initialCenter: locations.first,
                     initialZoom: 3.0,
                   ),
                   children: [
@@ -205,32 +179,20 @@ class _WorldMapPageState extends State<WorldMapPage> {
                           'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                       subdomains: const ['a', 'b', 'c'],
                     ),
-                    if (locations.isNotEmpty)
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: locations,
-                            color: Colors.blue,
-                            strokeWidth: 2.0,
-                            strokeCap: StrokeCap.round,
+                    MarkerLayer(
+                      markers: locations.map((location) {
+                        return Marker(
+                          point: location,
+                          width: 40,
+                          height: 40,
+                          child: const Icon(
+                            Icons.location_pin,
+                            color: Colors.red,
+                            size: 40,
                           ),
-                        ],
-                      ),
-                    if (locations.isNotEmpty)
-                      MarkerLayer(
-                        markers: locations.map((location) {
-                          return Marker(
-                            point: location,
-                            width: 40,
-                            height: 40,
-                            child: const Icon(
-                              Icons.location_pin,
-                              color: Colors.red,
-                              size: 40,
-                            ),
-                          );
-                        }).toList(),
-                      ),
+                        );
+                      }).toList(),
+                    ),
                   ],
                 ),
     );
