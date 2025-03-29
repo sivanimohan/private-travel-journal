@@ -109,7 +109,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
         title: const Text(
           'World Map',
           style: TextStyle(
-            fontFamily: 'Josefin Sans', // Changed to Josefin Sans
+            fontFamily: 'JosefinSans', // Changed to Josefin Sans
             fontSize: 22,
             fontWeight: FontWeight.w500,
           ),

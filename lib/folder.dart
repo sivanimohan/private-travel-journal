@@ -124,7 +124,7 @@ class _FolderPageState extends State<FolderPage> {
         title: Text(
           widget.folderName,
           style: const TextStyle(
-            fontFamily: 'Josefin Sans',
+            fontFamily: 'JosefinSans',
           ),
         ),
         backgroundColor: const Color(0xFF2C7DA0),
@@ -139,7 +139,7 @@ class _FolderPageState extends State<FolderPage> {
               style: const TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2C7DA0),
-                fontFamily: 'Josefin Sans',
+                fontFamily: 'JosefinSans',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -165,7 +165,7 @@ class _FolderPageState extends State<FolderPage> {
                               pages[index]['pageName']!,
                               style: const TextStyle(
                                 fontSize: 16,
-                                fontFamily: 'Josefin Sans',
+                                fontFamily: 'JosefinSans',
                                 color: Color(0xFF2C7DA0),
                               ),
                             ),

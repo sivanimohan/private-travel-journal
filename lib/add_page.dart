@@ -8,8 +8,7 @@ class AddPagePage extends StatelessWidget {
   final String userId;
   final Databases database;
 
-  static const String COLLECTION_ID =
-      '67cbeccb00382aae9f27'; // Pages Collection ID
+  static const String COLLECTION_ID = '67cbeccb00382aae9f27'; // Pages Collection ID
   static const String DATABASE_ID = '67c32fc700070ceeadac'; // Database ID
 
   AddPagePage({
@@ -24,7 +23,10 @@ class AddPagePage extends StatelessWidget {
     if (pageName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please enter a page name!'),
+          content: Text(
+            'Please enter a page name!',
+            style: TextStyle(fontFamily: 'JosefinSans'),
+          ),
           backgroundColor: Color(0xFF2C7DA0),
         ),
       );
@@ -37,26 +39,27 @@ class AddPagePage extends StatelessWidget {
       await database.createDocument(
         databaseId: DATABASE_ID,
         collectionId: COLLECTION_ID,
-        documentId: pageId, // Use the generated ID
+        documentId: pageId,
         data: {
-          'pageId': pageId, // Add `pageId` explicitly
+          'pageId': pageId,
           'folderId': folderId,
           'userId': userId,
           'pageName': pageName,
-          'backgroundColor': 0xFFFFFFFF, // Default white background
-          'location': '0.0.0.0', // Default IP address format
-          // Default location
-          'mediaIds': [], // Empty media list initially
-          'createdAt':
-              DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),
+          'backgroundColor': 0xFFFFFFFF,
+          'location': '0.0.0.0',
+          'mediaIds': [],
+          'createdAt': DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),
         },
       );
 
-      Navigator.pop(context, pageName); // Return the page name to update list
+      Navigator.pop(context, pageName);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to save page: $e'),
+          content: Text(
+            'Failed to save page: $e',
+            style: TextStyle(fontFamily: 'JosefinSans'),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -70,10 +73,12 @@ class AddPagePage extends StatelessWidget {
         title: const Text(
           'Add Page',
           style: TextStyle(
+
             fontSize: 24,
             fontWeight: FontWeight.w600,
             color: Colors.white,
             fontFamily: 'JosefinSans',
+
           ),
         ),
         backgroundColor: const Color(0xFF2C7DA0),
@@ -86,6 +91,7 @@ class AddPagePage extends StatelessWidget {
           children: [
             TextField(
               controller: pageNameController,
+              style: const TextStyle(fontFamily: 'JosefinSans'),
               decoration: InputDecoration(
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
@@ -99,8 +105,7 @@ class AddPagePage extends StatelessWidget {
               onPressed: () => _savePage(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2C7DA0),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -108,9 +113,11 @@ class AddPagePage extends StatelessWidget {
               child: const Text(
                 'Add Page',
                 style: TextStyle(
+
                   fontSize: 18,
                   color: Colors.white,
                   fontFamily: 'JosefinSans',
+
                 ),
               ),
             ),
