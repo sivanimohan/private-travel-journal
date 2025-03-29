@@ -70,7 +70,11 @@ class AddPagePage extends StatelessWidget {
         title: const Text(
           'Add Page',
           style: TextStyle(
-              fontSize: 24, fontWeight: FontWeight.w600, color: Colors.white),
+            fontSize: 24,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+            fontFamily: 'JosefinSans',
+          ),
         ),
         backgroundColor: const Color(0xFF2C7DA0),
       ),
@@ -87,6 +91,7 @@ class AddPagePage extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 hintText: 'Page Name',
+                hintStyle: const TextStyle(fontFamily: 'JosefinSans'),
               ),
             ),
             const SizedBox(height: 30),
@@ -102,7 +107,11 @@ class AddPagePage extends StatelessWidget {
               ),
               child: const Text(
                 'Add Page',
-                style: TextStyle(fontSize: 18, color: Colors.white),
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontFamily: 'JosefinSans',
+                ),
               ),
             ),
           ],

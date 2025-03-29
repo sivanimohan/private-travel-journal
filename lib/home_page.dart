@@ -207,7 +207,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       '👋 Welcome, ${widget.fullName}!',
                       style: const TextStyle(
-                        fontFamily: 'JosefinSans',
+                        fontFamily: 'JosefinSans', // Font changed
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -277,7 +277,7 @@ class _HomePageState extends State<HomePage> {
                                     Text(
                                       folder['name'],
                                       style: const TextStyle(
-                                        fontFamily: 'JosefinSans',
+                                        fontFamily: 'JosefinSans', // Font changed
                                         fontSize: 18,
                                         fontWeight: FontWeight.w500,
                                         color: Color(0xFF2C7DA0),
@@ -298,7 +298,6 @@ class _HomePageState extends State<HomePage> {
               ),
             ],
           ),
-          // Add the map button
           Positioned(
             left: 16,
             bottom: 16,

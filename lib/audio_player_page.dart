@@ -58,11 +58,21 @@ class _AudioPlayerPageState extends State<AudioPlayerPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Now Playing')),
+      appBar: AppBar(
+        title: const Text(
+          'Now Playing',
+          style: TextStyle(fontFamily: 'JosefinSans'), // Changed font
+        ),
+      ),
       body: _isLoading 
           ? const Center(child: CircularProgressIndicator())
           : _hasError
-              ? const Center(child: Text('Failed to load audio', style: TextStyle(color: Colors.red)))
+              ? const Center(
+                  child: Text(
+                    'Failed to load audio',
+                    style: TextStyle(color: Colors.red, fontFamily: 'JosefinSans'), // Changed font
+                  ),
+                )
               : _buildPlayerUI(),
     );
   }

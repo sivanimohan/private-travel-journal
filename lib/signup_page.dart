@@ -192,7 +192,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    /// Title
+                    /// Title (Unchanged Font)
                     Text(
                       "Sign Up",
                       style: GoogleFonts.alegreya(
@@ -206,14 +206,20 @@ class _SignUpPageState extends State<SignUpPage> {
                     /// Full Name Input
                     TextField(
                       controller: fullNameController,
-                      decoration: const InputDecoration(labelText: "Full Name"),
+                      decoration: InputDecoration(
+                        labelText: "Full Name",
+                        labelStyle: GoogleFonts.josefinSans(),
+                      ),
                     ),
                     const SizedBox(height: 10),
 
                     /// Email Input
                     TextField(
                       controller: emailController,
-                      decoration: const InputDecoration(labelText: "Email"),
+                      decoration: InputDecoration(
+                        labelText: "Email",
+                        labelStyle: GoogleFonts.josefinSans(),
+                      ),
                     ),
                     const SizedBox(height: 10),
 
@@ -221,7 +227,10 @@ class _SignUpPageState extends State<SignUpPage> {
                     TextField(
                       controller: passwordController,
                       obscureText: true,
-                      decoration: const InputDecoration(labelText: "Password"),
+                      decoration: InputDecoration(
+                        labelText: "Password",
+                        labelStyle: GoogleFonts.josefinSans(),
+                      ),
                     ),
                     const SizedBox(height: 20),
 
@@ -230,7 +239,10 @@ class _SignUpPageState extends State<SignUpPage> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _signUp,
-                        child: const Text("Sign Up"),
+                        child: Text(
+                          "Sign Up",
+                          style: GoogleFonts.josefinSans(),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -239,7 +251,10 @@ class _SignUpPageState extends State<SignUpPage> {
                     ElevatedButton.icon(
                       onPressed: _signInWithGoogle,
                       icon: Image.asset('assets/google.png', width: 20),
-                      label: const Text("Sign in with Google"),
+                      label: Text(
+                        "Sign in with Google",
+                        style: GoogleFonts.josefinSans(),
+                      ),
                     ),
                   ],
                 ),

@@ -165,6 +165,7 @@ class _LoginPageState extends State<LoginPage> {
                       controller: _emailController,
                       decoration: InputDecoration(
                         labelText: "Email",
+                        labelStyle: GoogleFonts.josefinSans(),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -179,6 +180,7 @@ class _LoginPageState extends State<LoginPage> {
                       controller: _passwordController,
                       decoration: InputDecoration(
                         labelText: "Password",
+                        labelStyle: GoogleFonts.josefinSans(),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -193,7 +195,10 @@ class _LoginPageState extends State<LoginPage> {
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: _emailSignIn,
-                        child: const Text("Sign in with Email"),
+                        child: Text(
+                          "Sign in with Email",
+                          style: GoogleFonts.josefinSans(),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF2C7DA0),
                           foregroundColor: Colors.white,
@@ -219,7 +224,10 @@ class _LoginPageState extends State<LoginPage> {
                           errorBuilder: (context, error, stackTrace) =>
                               const Icon(Icons.error),
                         ),
-                        label: const Text("Sign in with Google"),
+                        label: Text(
+                          "Sign in with Google",
+                          style: GoogleFonts.josefinSans(),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.white,
                           foregroundColor: Colors.black,
@@ -249,7 +257,7 @@ class _LoginPageState extends State<LoginPage> {
                       },
                       child: Text(
                         "Don't have an account? Sign up",
-                        style: GoogleFonts.alegreya(
+                        style: GoogleFonts.josefinSans(
                           fontSize: 16,
                           color: Colors.black87,
                           decoration: TextDecoration.underline,

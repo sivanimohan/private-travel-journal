@@ -111,7 +111,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
               borderRadius: BorderRadius.circular(20),
               boxShadow: const [
                 BoxShadow(
-                  // Fixed this line
                   color: Colors.black12,
                   blurRadius: 4,
                   offset: Offset(0, 2),
@@ -126,7 +125,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   onPressed: _toggleAudioPlayback,
                 ),
                 SizedBox(width: 8),
-                Text('Audio Player', style: TextStyle(fontSize: 14)),
+                Text('Audio Player', style: TextStyle(fontSize: 14, fontFamily: 'Josefin Sans')),
                 SizedBox(width: 16),
                 SizedBox(
                   width: 100,
@@ -190,16 +189,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
           _isLoadingAudio = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}')),
+          SnackBar(content: Text('Error: ${e.toString()}', style: TextStyle(fontFamily: 'Josefin Sans'))),
         );
       }
       if (kDebugMode) {
         print('Error playing audio: $e');
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoadingAudio = false);
-      }
+      if (mounted) setState(() => _isLoadingAudio = false);
     }
   }
 
@@ -253,7 +250,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         'audioIds': audioIds,
         'media': media.map((m) => m['fileId'] ?? '').toList(),
         'textData': jsonEncode(textDataToSave),
-        'location': selectedLocation ?? '', // This saves the location
+        'location': selectedLocation ?? '',
         'updatedAt': DateTime.now().toIso8601String(),
       };
 
@@ -266,7 +263,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e')),
+          SnackBar(content: Text('Save failed: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
         );
       }
       rethrow;
@@ -342,7 +339,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
       debugPrint('Error loading content: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading content: $e')),
+          SnackBar(content: Text('Error loading content: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
         );
       }
     }
@@ -446,7 +443,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add media: ${e.toString()}'),
+            content: Text('Failed to add media: ${e.toString()}', style: TextStyle(fontFamily: 'Josefin Sans')),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -461,20 +458,24 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Enter Text"),
+        title: const Text("Enter Text", style: TextStyle(fontFamily: 'Josefin Sans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
           maxLines: null,
-          decoration: const InputDecoration(hintText: "Type something..."),
+          style: TextStyle(fontFamily: 'Josefin Sans'),
+          decoration: const InputDecoration(
+            hintText: "Type something...",
+            hintStyle: TextStyle(fontFamily: 'Josefin Sans'),
+          ),
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel"),
+            child: const Text("Cancel", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("OK"),
+            child: const Text("OK", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () {
               final text = _textController.text.trim();
               if (text.isNotEmpty) {
@@ -505,7 +506,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           children: [
             ListTile(
               leading: const Icon(Icons.text_fields),
-              title: const Text('Text'),
+              title: const Text('Text', style: TextStyle(fontFamily: 'Josefin Sans')),
               onTap: () {
                 Navigator.pop(context);
                 setState(() => isAddingText = true);
@@ -513,7 +514,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.color_lens),
-              title: const Text('Text Color'),
+              title: const Text('Text Color', style: TextStyle(fontFamily: 'Josefin Sans')),
               onTap: () {
                 Navigator.pop(context);
                 _showTextColorPicker();
@@ -521,7 +522,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.image),
-              title: const Text('Image'),
+              title: const Text('Image', style: TextStyle(fontFamily: 'Josefin Sans')),
               onTap: () {
                 Navigator.pop(context);
                 _addMedia('image');
@@ -529,7 +530,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.audiotrack),
-              title: const Text('Audio'),
+              title: const Text('Audio', style: TextStyle(fontFamily: 'Josefin Sans')),
               onTap: () {
                 Navigator.pop(context);
                 _addAudio();
@@ -537,7 +538,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.format_paint),
-              title: const Text('Background Color'),
+              title: const Text('Background Color', style: TextStyle(fontFamily: 'Josefin Sans')),
               onTap: () {
                 Navigator.pop(context);
                 _changeBackgroundColor();
@@ -553,14 +554,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color"),
+        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'Josefin Sans')),
         content: BlockPicker(
           pickerColor: selectedTextColor,
           onColorChanged: (color) => setState(() => selectedTextColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done"),
+            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -572,14 +573,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Background Color"),
+        title: const Text("Choose Background Color", style: TextStyle(fontFamily: 'Josefin Sans')),
         content: BlockPicker(
           pickerColor: backgroundColor,
           onColorChanged: (color) => setState(() => backgroundColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done"),
+            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -596,12 +597,12 @@ class _A4WhitePageState extends State<A4WhitePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(widget.pageName, overflow: TextOverflow.ellipsis),
+            Text(widget.pageName, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'Josefin Sans')),
             if (selectedLocation != null && !isMobile)
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: Text('Location: $selectedLocation',
-                    style: const TextStyle(fontSize: 14)),
+                    style: const TextStyle(fontSize: 14, fontFamily: 'Josefin Sans')),
               ),
           ],
         ),
@@ -633,17 +634,17 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 });
 
                 try {
-                  await _saveContent(); // This will save the location along with other content
+                  await _saveContent();
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('Location saved successfully!')),
+                          content: Text('Location saved successfully!', style: TextStyle(fontFamily: 'Josefin Sans'))),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save location: $e')),
+                      SnackBar(content: Text('Failed to save location: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
                     );
                   }
                 } finally {
@@ -788,7 +789,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         children: [
           ListTile(
             leading: const Icon(Icons.edit),
-            title: const Text('Edit Text'),
+            title: const Text('Edit Text', style: TextStyle(fontFamily: 'Josefin Sans')),
             onTap: () {
               Navigator.pop(context);
               _editText(textData);
@@ -796,7 +797,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           ),
           ListTile(
             leading: const Icon(Icons.delete),
-            title: const Text('Delete'),
+            title: const Text('Delete', style: TextStyle(fontFamily: 'Josefin Sans')),
             onTap: () {
               setState(() {
                 textDataList.remove(textData);
@@ -806,7 +807,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           ),
           ListTile(
             leading: const Icon(Icons.color_lens),
-            title: const Text('Change Color'),
+            title: const Text('Change Color', style: TextStyle(fontFamily: 'Josefin Sans')),
             onTap: () {
               Navigator.pop(context);
               _changeTextColor(textData);
@@ -824,19 +825,20 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Edit Text"),
+        title: const Text("Edit Text", style: TextStyle(fontFamily: 'Josefin Sans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
           maxLines: null,
+          style: TextStyle(fontFamily: 'Josefin Sans'),
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel"),
+            child: const Text("Cancel", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("Save"),
+            child: const Text("Save", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () {
               final newText = _textController.text.trim();
               if (newText.isNotEmpty) {
@@ -856,14 +858,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color"),
+        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'Josefin Sans')),
         content: BlockPicker(
           pickerColor: textData.color,
           onColorChanged: (color) => setState(() => textData.color = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done"),
+            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -1085,7 +1087,7 @@ class _DraggableImageState extends State<DraggableImage> {
         children: const [
           Icon(Icons.broken_image, size: 40),
           SizedBox(height: 8),
-          Text('Failed to load image', style: TextStyle(fontSize: 12)),
+          Text('Failed to load image', style: TextStyle(fontSize: 12, fontFamily: 'Josefin Sans')),
         ],
       ),
     );

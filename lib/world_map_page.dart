@@ -106,7 +106,14 @@ class _WorldMapPageState extends State<WorldMapPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('World Map'),
+        title: const Text(
+          'World Map',
+          style: TextStyle(
+            fontFamily: 'Josefin Sans', // Changed to Josefin Sans
+            fontSize: 22,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         backgroundColor: const Color(0xFF2C7DA0),
       ),
       body: isLoading

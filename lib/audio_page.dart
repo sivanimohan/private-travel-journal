@@ -17,7 +17,10 @@ class _AudioPageState extends State<AudioPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Search and Play Songs"),
+        title: const Text(
+          "Search and Play Songs",
+          style: TextStyle(fontFamily: 'JosefinSans'), // Changed font
+        ),
       ),
       body: Column(
         children: [
@@ -27,6 +30,7 @@ class _AudioPageState extends State<AudioPage> {
               controller: _searchController,
               decoration: const InputDecoration(
                 hintText: "Search for a song...",
+                hintStyle: TextStyle(fontFamily: 'JosefinSans'), // Changed font
                 border: OutlineInputBorder(),
               ),
               onChanged: (query) async {

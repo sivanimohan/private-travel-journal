@@ -121,7 +121,12 @@ class _FolderPageState extends State<FolderPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.folderName),
+        title: Text(
+          widget.folderName,
+          style: const TextStyle(
+            fontFamily: 'Josefin Sans',
+          ),
+        ),
         backgroundColor: const Color(0xFF2C7DA0),
       ),
       body: Container(
@@ -134,7 +139,7 @@ class _FolderPageState extends State<FolderPage> {
               style: const TextStyle(
                 fontSize: 20,
                 color: Color(0xFF2C7DA0),
-                fontFamily: 'Inter',
+                fontFamily: 'Josefin Sans',
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -160,7 +165,7 @@ class _FolderPageState extends State<FolderPage> {
                               pages[index]['pageName']!,
                               style: const TextStyle(
                                 fontSize: 16,
-                                fontFamily: 'Inter',
+                                fontFamily: 'Josefin Sans',
                                 color: Color(0xFF2C7DA0),
                               ),
                             ),

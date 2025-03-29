@@ -1,0 +1,2 @@
+C:/Users/Sruthi/Android Project/privateTravelJournal/android/app/.cxx/Debug/6g181293/x86/CMakeFiles/edit_cache.dir
+C:/Users/Sruthi/Android Project/privateTravelJournal/android/app/.cxx/Debug/6g181293/x86/CMakeFiles/rebuild_cache.dir

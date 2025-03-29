@@ -72,7 +72,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
         title: const Text(
           'Create Folder',
           style: TextStyle(
-            fontFamily: 'Merriweather',
+            fontFamily: 'JosefinSans',
             fontSize: 22,
             fontWeight: FontWeight.w500,
           ),
@@ -89,7 +89,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
               'Folder Name:',
               style: TextStyle(
                 fontSize: 18,
-                fontFamily: 'Inter',
+                fontFamily: 'JosefinSans',
                 fontWeight: FontWeight.w400,
                 color: Color(0xFF2C7DA0),
               ),
@@ -109,13 +109,13 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
                 ),
                 hintText: 'Enter folder name',
                 hintStyle: const TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'JosefinSans',
                   color: Color(0xFF2C7DA0),
                   fontSize: 16,
                 ),
               ),
               style: const TextStyle(
-                fontFamily: 'Inter',
+                fontFamily: 'JosefinSans',
                 fontSize: 18,
                 color: Color(0xFF2C7DA0),
               ),
@@ -133,7 +133,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
               child: const Text(
                 'Create Folder',
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'JosefinSans',
                   fontSize: 18,
                   color: Colors.white,
                 ),
@@ -145,7 +145,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
               child: const Text(
                 'Cancel',
                 style: TextStyle(
-                  fontFamily: 'Inter',
+                  fontFamily: 'JosefinSans',
                   fontSize: 16,
                   color: Color(0xFF2C7DA0),
                 ),
