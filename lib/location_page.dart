@@ -59,31 +59,19 @@ class _LocationPageState extends State<LocationPage> {
     return [];
   }
 
-  void _addLocation(Map<String, dynamic> location) {
-    if (!locations.contains(location['displayName'])) {
-      setState(() {
-        locations.add(location['displayName']);
-      });
-    }
-    _searchController.clear();
-  }
-
+  // Update the _saveLocationToDatabase method:
+// In location_page.dart, update the _saveLocationToDatabase method:
   Future<void> _saveLocationToDatabase() async {
-    if (locations.isEmpty) return;
+    if (locations.isEmpty) {
+      Navigator.pop(context);
+      return;
+    }
 
     setState(() => isSaving = true);
 
     try {
-      await widget.databases.updateDocument(
-        databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbeccb00382aae9f27',
-        documentId: widget.userId, // Ensure this is a valid document ID
-        data: {'locations': locations},
-      );
-
-      if (mounted) {
-        Navigator.pop(context, locations);
-      }
+      // Return only the first location (since we only want one for a page)
+      Navigator.pop(context, locations.first);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +82,16 @@ class _LocationPageState extends State<LocationPage> {
       if (mounted) setState(() => isSaving = false);
     }
   }
+
+// Update the _addLocation method to replace rather than add:
+  void _addLocation(Map<String, dynamic> location) {
+    setState(() {
+      locations = [location['displayName']]; // Only keep one location
+    });
+    _searchController.clear();
+  }
+
+// Update the _addLocation method to replace rather than add:
 
   @override
   Widget build(BuildContext context) {

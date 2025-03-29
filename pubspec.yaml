@@ -50,7 +50,11 @@ dependencies:
   path_provider: ^2.0.11
   path: ^1.8.2
   image: ^4.0.17
+  
+  audio_service: ^0.18.9
 
+  uri_parser: ^1.0.0
+  youtube_explode_dart: ^2.3.9
   # Networking
   http: ^1.0.0
   appwrite: ^14.0.0

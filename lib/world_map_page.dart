@@ -24,11 +24,12 @@ class _WorldMapPageState extends State<WorldMapPage> {
   @override
   void initState() {
     super.initState();
-    _fetchAndGeocodeLocation();
+    _fetchLocations();
   }
 
-  /// Geocoding function using Nominatim
-  Future<LatLng?> geocodeWithNominatim(String address) async {
+  Future<LatLng?> _geocodeLocation(String address) async {
+    if (address.isEmpty) return null;
+
     final encodedAddress = Uri.encodeComponent(address);
     final url = Uri.parse(
         'https://nominatim.openstreetmap.org/search?format=json&q=$encodedAddress');
@@ -36,92 +37,68 @@ class _WorldMapPageState extends State<WorldMapPage> {
     try {
       final response = await http.get(
         url,
-        headers: {'User-Agent': 'YourAppName/1.0'}, // Required by Nominatim
+        headers: {'User-Agent': 'YourAppName/1.0'},
       );
-      print("🔹 Geocode API Response for '$address': ${response.statusCode}");
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        final data = jsonDecode(response.body) as List;
         if (data.isNotEmpty) {
           final lat = double.parse(data[0]['lat']);
           final lon = double.parse(data[0]['lon']);
-          print("✅ Found coordinates for '$address': $lat, $lon");
           return LatLng(lat, lon);
-        } else {
-          print("⚠️ No coordinates found for address: $address");
         }
       }
       return null;
     } catch (e) {
-      print('❌ Error geocoding with Nominatim: $e');
+      debugPrint('Geocoding error: $e');
       return null;
     }
   }
 
-  /// Fetch and geocode location
-  Future<void> _fetchAndGeocodeLocation() async {
+  Future<void> _fetchLocations() async {
     try {
-      print("🔄 Fetching document for user ID: ${widget.userId}");
+      setState(() {
+        isLoading = true;
+        errorMessage = '';
+      });
 
-      final documents = await widget.databases.listDocuments(
+      // Fetch all documents for the user that have a location
+      final response = await widget.databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
         collectionId: '67cbeccb00382aae9f27',
         queries: [
-          Query.equal("userId", widget.userId),
+          Query.equal('userId', widget.userId),
+          Query.isNotNull('location'),
+          Query.notEqual('location', ''),
         ],
       );
 
-      if (documents.documents.isEmpty) {
-        print("❌ No document found for user ID: ${widget.userId}");
-        setState(() {
-          errorMessage = "No document found for this user.";
-          isLoading = false;
-        });
-        return;
+      final List<LatLng> fetchedLocations = [];
+
+      // Geocode each location
+      for (final doc in response.documents) {
+        final location = doc.data['location'] as String;
+        if (location.isNotEmpty) {
+          final coords = await _geocodeLocation(location);
+          if (coords != null) {
+            fetchedLocations.add(coords);
+          }
+        }
       }
 
-      final document = documents.documents.first;
-      print("📄 Found Document: ${document.data}");
-
-      if (!document.data.containsKey('location')) {
-        print("⚠️ Error: 'location' field is missing in the document.");
-        setState(() {
-          errorMessage = "'location' field is missing";
-          isLoading = false;
-        });
-        return;
-      }
-
-      final locationString = document.data['location'] as String;
-      print("📍 Raw location string: '$locationString'");
-
-      if (locationString.isEmpty) {
-        print("⚠️ Location string is empty");
-        setState(() {
-          errorMessage = "No location entered";
-          isLoading = false;
-        });
-        return;
-      }
-
-      final coordinates = await geocodeWithNominatim(locationString);
-      if (coordinates != null) {
-        setState(() {
-          locations = [coordinates];
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          errorMessage = "No location could be found";
-          isLoading = false;
-        });
-      }
-    } catch (e) {
-      print('❌ Error fetching and geocoding location: $e');
       setState(() {
-        errorMessage = 'Error: $e';
+        locations = fetchedLocations;
+        isLoading = false;
+        if (locations.isEmpty) {
+          errorMessage = 'No locations found or could not be geocoded';
+        }
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = 'Error fetching locations: ${e.toString()}';
         isLoading = false;
       });
+      debugPrint('Error fetching locations: $e');
     }
   }
 
@@ -129,10 +106,7 @@ class _WorldMapPageState extends State<WorldMapPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'World Map',
-          style: TextStyle(fontFamily: 'JosefinSans'),
-        ),
+        title: const Text('World Map'),
         backgroundColor: const Color(0xFF2C7DA0),
       ),
       body: isLoading
@@ -142,28 +116,19 @@ class _WorldMapPageState extends State<WorldMapPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(
-                        Icons.location_off,
-                        size: 64,
-                        color: Colors.grey,
-                      ),
+                      const Icon(Icons.location_off,
+                          size: 64, color: Colors.grey),
                       const SizedBox(height: 16),
                       Text(
                         errorMessage.isNotEmpty
                             ? errorMessage
-                            : "No location found.",
+                            : 'No locations available',
                         style: const TextStyle(fontSize: 18),
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            isLoading = true;
-                            errorMessage = '';
-                          });
-                          _fetchAndGeocodeLocation();
-                        },
-                        child: const Text("Retry"),
+                        onPressed: _fetchLocations,
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
@@ -176,22 +141,21 @@ class _WorldMapPageState extends State<WorldMapPage> {
                   children: [
                     TileLayer(
                       urlTemplate:
-                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: const ['a', 'b', 'c'],
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                     ),
                     MarkerLayer(
-                      markers: locations.map((location) {
-                        return Marker(
-                          point: location,
-                          width: 40,
-                          height: 40,
-                          child: const Icon(
-                            Icons.location_pin,
-                            color: Colors.red,
-                            size: 40,
-                          ),
-                        );
-                      }).toList(),
+                      markers: locations
+                          .map((location) => Marker(
+                                point: location,
+                                width: 40,
+                                height: 40,
+                                child: const Icon(
+                                  Icons.location_pin,
+                                  color: Colors.red,
+                                  size: 40,
+                                ),
+                              ))
+                          .toList(),
                     ),
                   ],
                 ),

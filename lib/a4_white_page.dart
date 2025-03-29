@@ -2,15 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:just_audio/just_audio.dart';
 import 'dart:convert';
 import 'audio_page.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
+import 'youtube_audio_extractor.dart';
+import 'package:youtube_explode_dart/youtube_explode_dart.dart';
+import 'package:http/http.dart' as http;
+import 'location_page.dart';
 
-final String bucketId =
-    '67cd36510039f3d96c62'; // Add this near the top of your file
+final String bucketId = '67cd36510039f3d96c62';
 
 class A4WhitePage extends StatefulWidget {
   final String pageId;
@@ -39,10 +42,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
   late Databases databases;
   late Storage storage;
   final ImagePicker _picker = ImagePicker();
+  bool isSaving = false;
+  bool isSavingLocation = false;
+  List<String> locations = [];
 
-  late YoutubePlayerController _ytController;
-  final ValueNotifier<double> _volumeNotifier = ValueNotifier<double>(50);
-  bool isAudioPlaying = false;
+  // Audio player implementation
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  List<String> audioIds = [];
+  bool _isAudioPlaying = false;
+  double _audioVolume = 0.5; // Range 0-1
 
   // Text input
   List<TextData> textDataList = [];
@@ -62,15 +70,78 @@ class _A4WhitePageState extends State<A4WhitePage> {
     super.initState();
     databases = Databases(widget.client);
     storage = Storage(widget.client);
+
+    // Initialize audio player
+    _audioPlayer.playbackEventStream.listen((event) {
+      if (mounted) {
+        setState(() {
+          _isAudioPlaying = _audioPlayer.playing;
+        });
+      }
+    }, onError: (e) {
+      debugPrint('Audio player error: $e');
+      if (mounted) {
+        setState(() {
+          _isAudioPlaying = false;
+          _isLoadingAudio = false;
+        });
+      }
+    });
+
     _loadSavedContent();
     textDataList = [];
   }
 
   @override
   void dispose() {
-    _ytController.dispose();
-    _volumeNotifier.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  List<Widget> _buildAudioPlayers() {
+    return [
+      if (audioIds.isNotEmpty)
+        Positioned(
+          bottom: 20,
+          left: 20,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: const [
+                BoxShadow(
+                  // Fixed this line
+                  color: Colors.black12,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(_isAudioPlaying ? Icons.pause : Icons.play_arrow),
+                  onPressed: _toggleAudioPlayback,
+                ),
+                SizedBox(width: 8),
+                Text('Audio Player', style: TextStyle(fontSize: 14)),
+                SizedBox(width: 16),
+                SizedBox(
+                  width: 100,
+                  child: Slider(
+                    value: _audioVolume * 100,
+                    min: 0,
+                    max: 100,
+                    onChanged: _setAudioVolume,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ];
   }
 
   Future<void> _addAudio() async {
@@ -80,50 +151,89 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
 
     if (videoId != null && mounted) {
-      _playAudio(videoId);
+      setState(() => audioIds.add(videoId));
     }
   }
 
-  Future<void> _playAudio(String videoId) async {
+  bool _isLoadingAudio = false;
+  Future<void> _playAllAudio() async {
+    if (audioIds.isEmpty || !mounted) return;
+
     try {
-      _ytController = YoutubePlayerController(
-        initialVideoId: videoId,
-        flags: const YoutubePlayerFlags(
-          autoPlay: true,
-          mute: false,
-          hideControls: true,
-        ),
+      setState(() {
+        _isLoadingAudio = true;
+        _isAudioPlaying = true;
+      });
+
+      // Clear any previous audio sources
+      await _audioPlayer.stop();
+      await _audioPlayer
+          .setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
+
+      final audioUrl =
+          await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
+
+      // Set the audio source
+      await _audioPlayer.setAudioSource(
+        AudioSource.uri(Uri.parse(audioUrl)),
       );
 
-      if (mounted) {
-        setState(() {
-          isAudioPlaying = true;
-        });
-        _ytController.setVolume(_volumeNotifier.value.round());
-      }
+      // Set volume before playing
+      await _audioPlayer.setVolume(_audioVolume);
+
+      // Play the audio
+      await _audioPlayer.play();
     } catch (e) {
       if (mounted) {
+        setState(() {
+          _isAudioPlaying = false;
+          _isLoadingAudio = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error initializing player: $e')),
+          SnackBar(content: Text('Error: ${e.toString()}')),
         );
       }
+      if (kDebugMode) {
+        print('Error playing audio: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingAudio = false);
+      }
     }
+  }
+
+  Future<void> _stopAllAudio() async {
+    await _audioPlayer.stop();
+    if (mounted) {
+      setState(() => _isAudioPlaying = false);
+    }
+  }
+
+  void _toggleAudioPlayback() async {
+    if (_isAudioPlaying) {
+      await _stopAllAudio();
+    } else {
+      await _playAllAudio();
+    }
+  }
+
+  void _setAudioVolume(double volume) {
+    final newVolume = volume / 100; // Convert 0-100 to 0-1
+    setState(() => _audioVolume = newVolume);
+    _audioPlayer.setVolume(newVolume);
   }
 
   String _generateShortHash(String input) {
-    // Create a quick hash from the input string
     final hash = input.hashCode;
-
-    // Convert to a base36 string (0-9a-z) for compact representation
     final base36 = hash.toRadixString(36);
-
-    // Take the last 6 characters (or full string if shorter)
     return base36.length <= 6 ? base36 : base36.substring(base36.length - 6);
   }
 
   Future<void> _saveContent() async {
     try {
-      // Prepare text data for saving in compact format
+      setState(() => isSavingLocation = true);
+
       final textDataToSave = textDataList
           .map((text) => [
                 text.text,
@@ -140,9 +250,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
         'folderId': widget.folderId,
         'pageName': widget.pageName,
         'backgroundColor': backgroundColor.value,
+        'audioIds': audioIds,
         'media': media.map((m) => m['fileId'] ?? '').toList(),
-        'textData': jsonEncode(textDataToSave), // Save as JSON string
-        'location': selectedLocation ?? '',
+        'textData': jsonEncode(textDataToSave),
+        'location': selectedLocation ?? '', // This saves the location
         'updatedAt': DateTime.now().toIso8601String(),
       };
 
@@ -152,40 +263,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
         documentId: widget.pageId,
         data: documentData,
       );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Saved successfully!')),
-        );
-      }
     } catch (e) {
-      debugPrint('Save error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Save failed: $e')),
         );
       }
+      rethrow;
+    } finally {
+      if (mounted) setState(() => isSavingLocation = false);
     }
-  }
-
-// Safe string truncation helper
-  String _safeTruncate(String input, int maxLength) {
-    if (input.length <= maxLength) return input;
-    return input.substring(0, maxLength);
-  }
-
-// Modified text compression to prevent errors
-  String _compressTextData(List<TextData> texts) {
-    final compressed = texts
-        .map((t) => [
-              _safeTruncate(t.text, 20),
-              t.font.isNotEmpty ? t.font.substring(0, 1) : '',
-              t.color.value,
-              t.position.dx.toInt(),
-              t.position.dy.toInt(),
-            ])
-        .toList();
-    return jsonEncode(compressed);
   }
 
   Future<void> _loadSavedContent() async {
@@ -201,15 +288,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
       setState(() {
         backgroundColor = _parseBackgroundColor(data['backgroundColor']);
         selectedLocation = _parseLocation(data);
-
-        // Initialize textDataList as empty list first
+        _isAudioPlaying = data['audioId'] != null;
+        audioIds = List<String>.from(data['audioIds'] ?? []);
         textDataList = [];
 
-        // Load text data - handle both string and direct list formats
         if (data['textData'] != null) {
           try {
             if (data['textData'] is String) {
-              // Parse from JSON string
               final decoded = jsonDecode(data['textData'] as String) as List;
               textDataList = decoded.map((item) {
                 return TextData(
@@ -223,7 +308,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 );
               }).toList();
             } else if (data['textData'] is List) {
-              // Parse from direct list
               textDataList = (data['textData'] as List).map((item) {
                 if (item is Map) {
                   return TextData.fromJson(Map<String, dynamic>.from(item));
@@ -241,7 +325,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
           }
         }
 
-        // Load media
         media =
             (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
           return {
@@ -265,67 +348,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     }
   }
 
-  Widget _buildAudioPlayer() {
-    return Positioned(
-      bottom: 16,
-      left: 16,
-      right: 16,
-      child: Card(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Column(
-            children: [
-              Opacity(
-                opacity: 0,
-                child: SizedBox(
-                  height: 1,
-                  child: YoutubePlayer(
-                    controller: _ytController,
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  IconButton(
-                    icon: Icon(_ytController.value.isPlaying
-                        ? Icons.pause
-                        : Icons.play_arrow),
-                    onPressed: _ytController.value.isPlaying
-                        ? _ytController.pause
-                        : _ytController.play,
-                  ),
-                  Expanded(
-                    child: ValueListenableBuilder<double>(
-                      valueListenable: _volumeNotifier,
-                      builder: (context, volume, _) {
-                        return Slider(
-                          value: volume,
-                          min: 0,
-                          max: 100,
-                          onChanged: (value) {
-                            _volumeNotifier.value = value;
-                            _ytController.setVolume(value.round());
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                  ValueListenableBuilder<double>(
-                    valueListenable: _volumeNotifier,
-                    builder: (context, volume, _) {
-                      return Text('${volume.round()}%');
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _loadMediaData() async {
     try {
       for (int i = 0; i < media.length; i++) {
@@ -333,13 +355,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
         if (item['fileId'] != null && item['value'] == null) {
           try {
             if (kIsWeb) {
-              // For web, we get Uint8List directly
               final response = await storage.getFileView(
                 bucketId: bucketId,
                 fileId: item['fileId'],
               );
-
-              // Get file extension from metadata
               final file = await storage.getFile(
                 bucketId: bucketId,
                 fileId: item['fileId'],
@@ -348,7 +367,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
               media[i]['value'] =
                   "data:$mimeType;base64,${base64Encode(response)}";
             } else {
-              // For mobile, we can get the download URL
               final url = await storage.getFileDownload(
                 bucketId: bucketId,
                 fileId: item['fileId'],
@@ -392,17 +410,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
       final bytes = await file.readAsBytes();
       final fileName = file.name;
 
-      // Upload to Appwrite Storage
       final uploadedFile = await storage.createFile(
         bucketId: bucketId,
         fileId: ID.unique(),
         file: InputFile.fromBytes(
           bytes: bytes,
           filename: fileName,
-        ), // Removed mimeType parameter
+        ),
       );
 
-      // For web, create data URL immediately
       if (kIsWeb) {
         final mimeType = _getMimeType(fileName);
         setState(() {
@@ -416,7 +432,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
           });
         });
       } else {
-        // For mobile, we'll load the URL when needed
         setState(() {
           media.add({
             'type': type,
@@ -573,7 +588,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   @override
-  @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isMobile = screenWidth < 600;
@@ -602,37 +616,81 @@ class _A4WhitePageState extends State<A4WhitePage> {
             onPressed: () async {
               final location = await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => LocationPage()),
+                MaterialPageRoute(
+                  builder: (context) => LocationPage(
+                    userId: widget.userId,
+                    databases: databases,
+                    existingLocations:
+                        selectedLocation != null ? [selectedLocation!] : [],
+                  ),
+                ),
               );
+
               if (location != null && mounted) {
-                setState(() => selectedLocation = location['address']);
+                setState(() {
+                  selectedLocation = location;
+                  isSavingLocation = true;
+                });
+
+                try {
+                  await _saveContent(); // This will save the location along with other content
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                          content: Text('Location saved successfully!')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to save location: $e')),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => isSavingLocation = false);
+                }
               }
             },
             tooltip: 'Location',
           ),
         ],
       ),
-      body: GestureDetector(
-        onTap: () {
-          if (isAddingText) {
-            final renderBox = context.findRenderObject() as RenderBox;
-            final tapPosition = renderBox.globalToLocal(
-              (context.findRenderObject() as RenderBox)
-                  .localToGlobal(Offset.zero),
-            );
-            _addText(tapPosition);
-          }
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          double contentHeight = [
+            constraints.maxHeight,
+            100.0 + (textDataList.length * 30.0),
+            media.fold(0.0,
+                (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
+          ].reduce(max);
+
+          return SingleChildScrollView(
+            child: Container(
+              height: contentHeight,
+              child: GestureDetector(
+                  onTap: () {
+                    if (isAddingText) {
+                      final renderBox = context.findRenderObject() as RenderBox;
+                      final tapPosition = renderBox.globalToLocal(
+                        (context.findRenderObject() as RenderBox)
+                            .localToGlobal(Offset.zero),
+                      );
+                      _addText(tapPosition);
+                    }
+                  },
+                  child: Stack(
+                    children: [
+                      Container(
+                        color: backgroundColor,
+                        height: contentHeight,
+                      ),
+                      ..._buildDraggableElements(isMobile),
+                      ..._buildAudioPlayers(),
+                    ],
+                  )),
+            ),
+          );
         },
-        child: Stack(
-          children: [
-            Container(color: backgroundColor),
-
-            // Stack all draggable elements
-            ..._buildDraggableElements(isMobile),
-
-            if (isAudioPlaying) _buildAudioPlayer(),
-          ],
-        ),
       ),
       floatingActionButton: FloatingActionButton(
         mini: isMobile,
@@ -643,82 +701,85 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // New method to build all draggable elements
   List<Widget> _buildDraggableElements(bool isMobile) {
     final elements = <Widget>[];
-    double verticalOffset = 20.0; // Initial vertical position
 
-    // Add text elements
+    final screenHeight = MediaQuery.of(context).size.height;
+    final textHeight = 100.0 + (textDataList.length * 30.0);
+    final mediaHeight = media.fold(
+        0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
+    final contentHeight = [screenHeight, textHeight, mediaHeight].reduce(max);
+
     for (var textData in textDataList) {
       elements.add(
         Positioned(
           left: textData.position.dx,
-          top: textData.position.dy,
-          child: Draggable(
-            feedback: Material(
-              child: Text(
-                textData.text,
-                style: TextStyle(
-                  fontFamily: textData.font,
-                  color: textData.color,
-                  fontSize: isMobile ? 18 : 24,
-                ),
-              ),
-            ),
-            childWhenDragging: Container(),
-            onDragEnd: (details) {
-              setState(() {
-                textData.position = details.offset;
-              });
-            },
-            child: GestureDetector(
-              onLongPress: () => _showTextOptions(textData),
-              child: Text(
-                textData.text,
-                style: TextStyle(
-                  fontFamily: textData.font,
-                  color: textData.color,
-                  fontSize: isMobile ? 18 : 24,
-                ),
-              ),
-            ),
-          ),
+          top: min<double>(textData.position.dy, contentHeight - 30),
+          child: _buildDraggableText(textData, isMobile, contentHeight),
         ),
       );
-      verticalOffset += 30; // Space between elements
     }
 
-    // Add image elements
     for (int i = 0; i < media.length; i++) {
       final mediaItem = media[i];
+      final itemHeight =
+          (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
+
       elements.add(
         Positioned(
           left: mediaItem['position'].dx,
-          top: mediaItem['position'].dy,
+          top:
+              min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
           child: DraggableImage(
             key: ValueKey('image_${mediaItem['fileId']}_$i'),
             mediaItem: mediaItem,
-            onPositionChanged: (updatedItem) {
-              setState(() {
-                media[i] = updatedItem;
-              });
-            },
-            onDelete: () {
-              setState(() {
-                media.removeAt(i);
-              });
-            },
+            onPositionChanged: (updatedItem) =>
+                setState(() => media[i] = updatedItem),
+            onDelete: () => setState(() => media.removeAt(i)),
             isMobile: isMobile,
+            maxHeight: contentHeight,
           ),
         ),
       );
-      verticalOffset += mediaItem['height'] + 20; // Space after image
     }
 
     return elements;
   }
 
-  // New method to show text editing options
+  Widget _buildDraggableText(
+      TextData textData, bool isMobile, double contentHeight) {
+    return Draggable(
+      feedback: Material(
+        child: Text(
+          textData.text,
+          style: TextStyle(
+            fontFamily: textData.font,
+            color: textData.color,
+            fontSize: isMobile ? 18 : 24,
+          ),
+        ),
+      ),
+      childWhenDragging: Container(),
+      onDragEnd: (details) => setState(() {
+        textData.position = Offset(
+          details.offset.dx,
+          min<double>(details.offset.dy, contentHeight - 30),
+        );
+      }),
+      child: GestureDetector(
+        onLongPress: () => _showTextOptions(textData),
+        child: Text(
+          textData.text,
+          style: TextStyle(
+            fontFamily: textData.font,
+            color: textData.color,
+            fontSize: isMobile ? 18 : 24,
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showTextOptions(TextData textData) {
     showModalBottomSheet(
       context: context,
@@ -756,7 +817,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // New method to edit existing text
   void _editText(TextData textData) {
     final TextEditingController _textController =
         TextEditingController(text: textData.text);
@@ -792,7 +852,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  // New method to change text color
   void _changeTextColor(TextData textData) {
     showDialog(
       context: context,
@@ -813,20 +872,19 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 }
 
-class LocationPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Select Location')),
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () =>
-              Navigator.pop(context, {'address': '123 Main St, City, Country'}),
-          child: const Text('Select Location'),
-        ),
-      ),
-    );
+Color _parseBackgroundColor(dynamic bgColor) {
+  if (bgColor == null) return Colors.white;
+  if (bgColor is int) return Color(bgColor);
+  if (bgColor is String) {
+    return Color(int.tryParse(bgColor) ?? Colors.white.value);
   }
+  return Colors.white;
+}
+
+String? _parseLocation(Map<String, dynamic> data) {
+  if (data['location'] is String) return data['location'];
+  if (data['locations'] is String) return data['locations'];
+  return null;
 }
 
 class TextData {
@@ -865,28 +923,13 @@ class TextData {
         'position': {'dx': position.dx, 'dy': position.dy},
       };
 }
-// Add these methods to your _A4WhitePageState class
-
-Color _parseBackgroundColor(dynamic bgColor) {
-  if (bgColor == null) return Colors.white;
-  if (bgColor is int) return Color(bgColor);
-  if (bgColor is String) {
-    return Color(int.tryParse(bgColor) ?? Colors.white.value);
-  }
-  return Colors.white;
-}
-
-String? _parseLocation(Map<String, dynamic> data) {
-  if (data['location'] is String) return data['location'];
-  if (data['locations'] is String) return data['locations'];
-  return null;
-}
 
 class DraggableImage extends StatefulWidget {
   final Map<String, dynamic> mediaItem;
   final Function(Map<String, dynamic>) onPositionChanged;
   final Function() onDelete;
   final bool isMobile;
+  final double maxHeight;
 
   const DraggableImage({
     super.key,
@@ -894,6 +937,7 @@ class DraggableImage extends StatefulWidget {
     required this.onPositionChanged,
     required this.onDelete,
     required this.isMobile,
+    required this.maxHeight,
   });
 
   @override
@@ -934,9 +978,14 @@ class _DraggableImageState extends State<DraggableImage> {
     final baseHeight = widget.mediaItem['height']?.toDouble() ??
         (widget.isMobile ? 266.0 : 400.0);
 
+    final topPosition = min<double>(
+      (position.dy + _panOffset.dy).toDouble(),
+      (widget.maxHeight - baseHeight * _scale).toDouble(),
+    );
+
     return Positioned(
       left: position.dx + _panOffset.dx,
-      top: position.dy + _panOffset.dy,
+      top: topPosition,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () => setState(() => _isHovering = !_isHovering),
@@ -1001,7 +1050,6 @@ class _DraggableImageState extends State<DraggableImage> {
         errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
       );
     } else if (widget.mediaItem['fileId'] != null) {
-      // If we have a fileId but no URL yet, show loading
       return Center(child: CircularProgressIndicator());
     }
 
@@ -1041,16 +1089,6 @@ class _DraggableImageState extends State<DraggableImage> {
         ],
       ),
     );
-  }
-
-  Uint8List _decodeBase64(String base64String) {
-    try {
-      final String data = base64String.split(',').last;
-      return base64.decode(data);
-    } catch (e) {
-      debugPrint('Base64 decode error: $e');
-      return Uint8List(0); // Return empty bytes to trigger error builder
-    }
   }
 
   void _handleDoubleTap() {
