@@ -33,7 +33,10 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
     if (folderName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("❗ Please enter a folder name!"),
+          content: Text(
+            "❗ Please enter a folder name!",
+            style: TextStyle(fontFamily: 'JosefinSans'),
+          ),
           backgroundColor: Color(0xFF2C7DA0),
         ),
       );
@@ -49,7 +52,6 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
           'folderId': ID.unique(),
           'userId': widget.userId,
           'name': folderName, // ✅ Use 'name' instead of 'folderName'
-
           'createdAt': DateTime.now().toIso8601String(),
         },
       );
@@ -58,7 +60,10 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('❌ Failed to create folder: $e'),
+          content: Text(
+            '❌ Failed to create folder: $e',
+            style: const TextStyle(fontFamily: 'JosefinSans'),
+          ),
           backgroundColor: Colors.red,
         ),
       );

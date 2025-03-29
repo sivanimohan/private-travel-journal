@@ -67,7 +67,10 @@ class _LoginPageState extends State<LoginPage> {
       print("❌ Google sign-in failed: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Google sign-in failed: ${e.toString()}"),
+          content: Text(
+            "Google sign-in failed: ${e.toString()}",
+            style: GoogleFonts.josefinSans(),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -117,7 +120,10 @@ class _LoginPageState extends State<LoginPage> {
       print("❌ Email sign-in failed: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Email sign-in failed: ${e.toString()}"),
+          content: Text(
+            "Email sign-in failed: ${e.toString()}",
+            style: GoogleFonts.josefinSans(),
+          ),
           backgroundColor: Colors.red,
         ),
       );
