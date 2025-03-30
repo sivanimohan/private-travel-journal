@@ -236,7 +236,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
         'folderId': widget.folderId,
         'pageName': widget.pageName,
         'backgroundColor': backgroundColor.value,
-        'audioIds': audioIds,
         'media': media.map((m) => m['fileId'] ?? '').toList(),
         'textData': jsonEncode(textDataToSave),
         'location': selectedLocation ?? '',
@@ -517,6 +516,36 @@ class _A4WhitePageState extends State<A4WhitePage> {
       }
       debugPrint('Failed to add media: $e');
     }
+  }
+
+// Add this to your a4_white_page.dart
+  Future<Map<String, dynamic>> _collectInsightsData() async {
+    final doc = await databases.getDocument(
+      databaseId: '67c32fc700070ceeadac',
+      collectionId: '67cbeccb00382aae9f27',
+      documentId: widget.pageId,
+    );
+
+    final data = doc.data;
+    final allPages = await databases.listDocuments(
+      databaseId: '67c32fc700070ceeadac',
+      collectionId: '67cbeccb00382aae9f27',
+      queries: [
+        Query.equal('userId', widget.userId),
+      ],
+    );
+
+    return {
+      'currentPage': {
+        'textData': data['textData'],
+        'media': data['media'],
+        'location': data['location'],
+        'updatedAt': data['updatedAt'],
+      },
+      'allPages': allPages.documents.map((d) => d.data).toList(),
+      'bucketId': bucketId,
+      'userId': widget.userId,
+    };
   }
 
   Future<void> _initializeVideoPlayer(

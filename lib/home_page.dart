@@ -5,7 +5,7 @@ import 'create_folder.dart';
 import 'folder.dart';
 import 'dart:io';
 import 'world_map_page.dart';
-import 'insight.dart';
+import 'insight.dart'; // Updated import to match the file name
 
 class HomePage extends StatefulWidget {
   final Client client;
@@ -302,7 +302,7 @@ class _HomePageState extends State<HomePage> {
           ),
           Positioned(
             right: 16,
-            bottom: 16,
+            bottom: 80, // Moved up to make space for the new button
             child: FloatingActionButton(
               onPressed: () {
                 Navigator.push(
@@ -311,6 +311,7 @@ class _HomePageState extends State<HomePage> {
                     builder: (context) => InsightPage(
                       databases: databases,
                       userId: widget.userId,
+                      client: widget.client,
                     ),
                   ),
                 );
