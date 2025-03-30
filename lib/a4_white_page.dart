@@ -50,19 +50,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
   final AudioPlayer _audioPlayer = AudioPlayer();
   List<String> audioIds = [];
   bool _isAudioPlaying = false;
-  double _audioVolume = 0.5; // Range 0-1
+  double _audioVolume = 0.5;
 
   // Text input
   List<TextData> textDataList = [];
   bool isAddingText = false;
-  String selectedFont = 'Delius Swash Caps';
+  String selectedFont = 'DeliciousHandrawn';
   Color selectedTextColor = Colors.black;
   List<String> fonts = [
-    'Delius Swash Caps',
-    'Delicious Handrawn',
-    'Sacramento',
-    'Schoolbell',
-    'Indie Flower',
+    'DeliciousHandrawn',
+    'JosefinSans',
   ];
 
   @override
@@ -71,7 +68,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     databases = Databases(widget.client);
     storage = Storage(widget.client);
 
-    // Initialize audio player
     _audioPlayer.playbackEventStream.listen((event) {
       if (mounted) {
         setState(() {
@@ -125,7 +121,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   onPressed: _toggleAudioPlayback,
                 ),
                 SizedBox(width: 8),
-                Text('Audio Player', style: TextStyle(fontSize: 14, fontFamily: 'Josefin Sans')),
+                Text('Audio Player', style: TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
                 SizedBox(width: 16),
                 SizedBox(
                   width: 100,
@@ -164,23 +160,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
         _isAudioPlaying = true;
       });
 
-      // Clear any previous audio sources
       await _audioPlayer.stop();
-      await _audioPlayer
-          .setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
-
-      final audioUrl =
-          await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
-
-      // Set the audio source
-      await _audioPlayer.setAudioSource(
-        AudioSource.uri(Uri.parse(audioUrl)),
-      );
-
-      // Set volume before playing
+      await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
+      final audioUrl = await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
+      await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(audioUrl)));
       await _audioPlayer.setVolume(_audioVolume);
-
-      // Play the audio
       await _audioPlayer.play();
     } catch (e) {
       if (mounted) {
@@ -189,12 +173,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
           _isLoadingAudio = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}', style: TextStyle(fontFamily: 'Josefin Sans'))),
+          SnackBar(content: Text('Error: ${e.toString()}', style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
-      if (kDebugMode) {
-        print('Error playing audio: $e');
-      }
+      if (kDebugMode) print('Error playing audio: $e');
     } finally {
       if (mounted) setState(() => _isLoadingAudio = false);
     }
@@ -202,44 +184,30 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
   Future<void> _stopAllAudio() async {
     await _audioPlayer.stop();
-    if (mounted) {
-      setState(() => _isAudioPlaying = false);
-    }
+    if (mounted) setState(() => _isAudioPlaying = false);
   }
 
   void _toggleAudioPlayback() async {
-    if (_isAudioPlaying) {
-      await _stopAllAudio();
-    } else {
-      await _playAllAudio();
-    }
+    if (_isAudioPlaying) await _stopAllAudio();
+    else await _playAllAudio();
   }
 
   void _setAudioVolume(double volume) {
-    final newVolume = volume / 100; // Convert 0-100 to 0-1
+    final newVolume = volume / 100;
     setState(() => _audioVolume = newVolume);
     _audioPlayer.setVolume(newVolume);
-  }
-
-  String _generateShortHash(String input) {
-    final hash = input.hashCode;
-    final base36 = hash.toRadixString(36);
-    return base36.length <= 6 ? base36 : base36.substring(base36.length - 6);
   }
 
   Future<void> _saveContent() async {
     try {
       setState(() => isSavingLocation = true);
-
-      final textDataToSave = textDataList
-          .map((text) => [
-                text.text,
-                text.font,
-                text.color.value,
-                text.position.dx.toInt(),
-                text.position.dy.toInt(),
-              ])
-          .toList();
+      final textDataToSave = textDataList.map((text) => [
+            text.text,
+            text.font,
+            text.color.value,
+            text.position.dx.toInt(),
+            text.position.dy.toInt(),
+          ]).toList();
 
       final documentData = {
         'pageId': widget.pageId,
@@ -263,7 +231,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
+          SnackBar(content: Text('Save failed: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
       rethrow;
@@ -281,7 +249,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
       );
 
       final data = doc.data;
-
       setState(() {
         backgroundColor = _parseBackgroundColor(data['backgroundColor']);
         selectedLocation = _parseLocation(data);
@@ -296,7 +263,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
               textDataList = decoded.map((item) {
                 return TextData(
                   text: item[0]?.toString() ?? '',
-                  font: item[1]?.toString() ?? fonts.first,
+                  font: item[1]?.toString() ?? 'DeliciousHandrawn',
                   color: Color(item[2] is int ? item[2] : Colors.black.value),
                   position: Offset(
                     (item[3] ?? 50).toDouble(),
@@ -311,7 +278,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 }
                 return TextData(
                   text: '',
-                  font: fonts.first,
+                  font: 'DeliciousHandrawn',
                   color: Colors.black,
                   position: Offset.zero,
                 );
@@ -322,8 +289,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           }
         }
 
-        media =
-            (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
+        media = (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
           return {
             'type': 'image',
             'fileId': item is String ? item : '',
@@ -339,7 +305,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
       debugPrint('Error loading content: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading content: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
+          SnackBar(content: Text('Error loading content: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
     }
@@ -361,8 +327,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 fileId: item['fileId'],
               );
               final mimeType = _getMimeType(file.name);
-              media[i]['value'] =
-                  "data:$mimeType;base64,${base64Encode(response)}";
+              media[i]['value'] = "data:$mimeType;base64,${base64Encode(response)}";
             } else {
               final url = await storage.getFileDownload(
                 bucketId: bucketId,
@@ -385,17 +350,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
   String _getMimeType(String filename) {
     final ext = filename.split('.').last.toLowerCase();
     switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'gif':
-        return 'image/gif';
-      case 'webp':
-        return 'image/webp';
-      default:
-        return 'image/jpeg';
+      case 'jpg': case 'jpeg': return 'image/jpeg';
+      case 'png': return 'image/png';
+      case 'gif': return 'image/gif';
+      case 'webp': return 'image/webp';
+      default: return 'image/jpeg';
     }
   }
 
@@ -406,14 +365,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
       final bytes = await file.readAsBytes();
       final fileName = file.name;
-
       final uploadedFile = await storage.createFile(
         bucketId: bucketId,
         fileId: ID.unique(),
-        file: InputFile.fromBytes(
-          bytes: bytes,
-          filename: fileName,
-        ),
+        file: InputFile.fromBytes(bytes: bytes, filename: fileName),
       );
 
       if (kIsWeb) {
@@ -443,7 +398,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add media: ${e.toString()}', style: TextStyle(fontFamily: 'Josefin Sans')),
+            content: Text('Failed to add media: ${e.toString()}', style: TextStyle(fontFamily: 'JosefinSans')),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -458,24 +413,24 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Enter Text", style: TextStyle(fontFamily: 'Josefin Sans')),
+        title: const Text("Enter Text", style: TextStyle(fontFamily: 'JosefinSans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
           maxLines: null,
-          style: TextStyle(fontFamily: 'Josefin Sans'),
+          style: TextStyle(fontFamily: 'DeliciousHandrawn', fontSize: 28),
           decoration: const InputDecoration(
             hintText: "Type something...",
-            hintStyle: TextStyle(fontFamily: 'Josefin Sans'),
+            hintStyle: TextStyle(fontFamily: 'JosefinSans'),
           ),
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Cancel", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("OK", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("OK", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () {
               final text = _textController.text.trim();
               if (text.isNotEmpty) {
@@ -485,6 +440,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                     font: selectedFont,
                     color: selectedTextColor,
                     position: position,
+                    size: 28,
                   ));
                   isAddingText = false;
                 });
@@ -506,7 +462,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           children: [
             ListTile(
               leading: const Icon(Icons.text_fields),
-              title: const Text('Text', style: TextStyle(fontFamily: 'Josefin Sans')),
+              title: const Text('Text', style: TextStyle(fontFamily: 'JosefinSans')),
               onTap: () {
                 Navigator.pop(context);
                 setState(() => isAddingText = true);
@@ -514,7 +470,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.color_lens),
-              title: const Text('Text Color', style: TextStyle(fontFamily: 'Josefin Sans')),
+              title: const Text('Text Color', style: TextStyle(fontFamily: 'JosefinSans')),
               onTap: () {
                 Navigator.pop(context);
                 _showTextColorPicker();
@@ -522,7 +478,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.image),
-              title: const Text('Image', style: TextStyle(fontFamily: 'Josefin Sans')),
+              title: const Text('Image', style: TextStyle(fontFamily: 'JosefinSans')),
               onTap: () {
                 Navigator.pop(context);
                 _addMedia('image');
@@ -530,7 +486,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.audiotrack),
-              title: const Text('Audio', style: TextStyle(fontFamily: 'Josefin Sans')),
+              title: const Text('Audio', style: TextStyle(fontFamily: 'JosefinSans')),
               onTap: () {
                 Navigator.pop(context);
                 _addAudio();
@@ -538,7 +494,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             ),
             ListTile(
               leading: const Icon(Icons.format_paint),
-              title: const Text('Background Color', style: TextStyle(fontFamily: 'Josefin Sans')),
+              title: const Text('Background Color', style: TextStyle(fontFamily: 'JosefinSans')),
               onTap: () {
                 Navigator.pop(context);
                 _changeBackgroundColor();
@@ -554,14 +510,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'Josefin Sans')),
+        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: selectedTextColor,
           onColorChanged: (color) => setState(() => selectedTextColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -573,14 +529,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Background Color", style: TextStyle(fontFamily: 'Josefin Sans')),
+        title: const Text("Choose Background Color", style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: backgroundColor,
           onColorChanged: (color) => setState(() => backgroundColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -597,12 +553,12 @@ class _A4WhitePageState extends State<A4WhitePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(widget.pageName, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'Josefin Sans')),
+            Text(widget.pageName, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'JosefinSans')),
             if (selectedLocation != null && !isMobile)
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: Text('Location: $selectedLocation',
-                    style: const TextStyle(fontSize: 14, fontFamily: 'Josefin Sans')),
+                    style: const TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
               ),
           ],
         ),
@@ -621,8 +577,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   builder: (context) => LocationPage(
                     userId: widget.userId,
                     databases: databases,
-                    existingLocations:
-                        selectedLocation != null ? [selectedLocation!] : [],
+                    existingLocations: selectedLocation != null ? [selectedLocation!] : [],
                   ),
                 ),
               );
@@ -638,13 +593,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('Location saved successfully!', style: TextStyle(fontFamily: 'Josefin Sans'))),
+                          content: Text('Location saved successfully!', style: TextStyle(fontFamily: 'JosefinSans'))),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save location: $e', style: TextStyle(fontFamily: 'Josefin Sans'))),
+                      SnackBar(content: Text('Failed to save location: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
                     );
                   }
                 } finally {
@@ -661,34 +616,33 @@ class _A4WhitePageState extends State<A4WhitePage> {
           double contentHeight = [
             constraints.maxHeight,
             100.0 + (textDataList.length * 30.0),
-            media.fold(0.0,
-                (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
+            media.fold(0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
           ].reduce(max);
 
           return SingleChildScrollView(
             child: Container(
               height: contentHeight,
               child: GestureDetector(
-                  onTap: () {
-                    if (isAddingText) {
-                      final renderBox = context.findRenderObject() as RenderBox;
-                      final tapPosition = renderBox.globalToLocal(
-                        (context.findRenderObject() as RenderBox)
-                            .localToGlobal(Offset.zero),
-                      );
-                      _addText(tapPosition);
-                    }
-                  },
-                  child: Stack(
-                    children: [
-                      Container(
-                        color: backgroundColor,
-                        height: contentHeight,
-                      ),
-                      ..._buildDraggableElements(isMobile),
-                      ..._buildAudioPlayers(),
-                    ],
-                  )),
+                onTap: () {
+                  if (isAddingText) {
+                    final renderBox = context.findRenderObject() as RenderBox;
+                    final tapPosition = renderBox.globalToLocal(
+                      (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero),
+                    );
+                    _addText(tapPosition);
+                  }
+                },
+                child: Stack(
+                  children: [
+                    Container(
+                      color: backgroundColor,
+                      height: contentHeight,
+                    ),
+                    ..._buildDraggableElements(isMobile),
+                    ..._buildAudioPlayers(),
+                  ],
+                ),
+              ),
             ),
           );
         },
@@ -704,11 +658,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
   List<Widget> _buildDraggableElements(bool isMobile) {
     final elements = <Widget>[];
-
     final screenHeight = MediaQuery.of(context).size.height;
     final textHeight = 100.0 + (textDataList.length * 30.0);
-    final mediaHeight = media.fold(
-        0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
+    final mediaHeight = media.fold(0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
     final contentHeight = [screenHeight, textHeight, mediaHeight].reduce(max);
 
     for (var textData in textDataList) {
@@ -723,19 +675,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
     for (int i = 0; i < media.length; i++) {
       final mediaItem = media[i];
-      final itemHeight =
-          (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
+      final itemHeight = (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
 
       elements.add(
         Positioned(
           left: mediaItem['position'].dx,
-          top:
-              min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
+          top: min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
           child: DraggableImage(
             key: ValueKey('image_${mediaItem['fileId']}_$i'),
             mediaItem: mediaItem,
-            onPositionChanged: (updatedItem) =>
-                setState(() => media[i] = updatedItem),
+            onPositionChanged: (updatedItem) => setState(() => media[i] = updatedItem),
             onDelete: () => setState(() => media.removeAt(i)),
             isMobile: isMobile,
             maxHeight: contentHeight,
@@ -747,8 +696,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     return elements;
   }
 
-  Widget _buildDraggableText(
-      TextData textData, bool isMobile, double contentHeight) {
+  Widget _buildDraggableText(TextData textData, bool isMobile, double contentHeight) {
     return Draggable(
       feedback: Material(
         child: Text(
@@ -756,7 +704,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           style: TextStyle(
             fontFamily: textData.font,
             color: textData.color,
-            fontSize: isMobile ? 18 : 24,
+            fontSize: textData.size,
           ),
         ),
       ),
@@ -774,7 +722,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
           style: TextStyle(
             fontFamily: textData.font,
             color: textData.color,
-            fontSize: isMobile ? 18 : 24,
+            fontSize: textData.size,
           ),
         ),
       ),
@@ -789,7 +737,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         children: [
           ListTile(
             leading: const Icon(Icons.edit),
-            title: const Text('Edit Text', style: TextStyle(fontFamily: 'Josefin Sans')),
+            title: const Text('Edit Text', style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
               Navigator.pop(context);
               _editText(textData);
@@ -797,17 +745,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
           ),
           ListTile(
             leading: const Icon(Icons.delete),
-            title: const Text('Delete', style: TextStyle(fontFamily: 'Josefin Sans')),
+            title: const Text('Delete', style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
-              setState(() {
-                textDataList.remove(textData);
-              });
+              setState(() => textDataList.remove(textData));
               Navigator.pop(context);
             },
           ),
           ListTile(
             leading: const Icon(Icons.color_lens),
-            title: const Text('Change Color', style: TextStyle(fontFamily: 'Josefin Sans')),
+            title: const Text('Change Color', style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
               Navigator.pop(context);
               _changeTextColor(textData);
@@ -819,32 +765,29 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   void _editText(TextData textData) {
-    final TextEditingController _textController =
-        TextEditingController(text: textData.text);
+    final TextEditingController _textController = TextEditingController(text: textData.text);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Edit Text", style: TextStyle(fontFamily: 'Josefin Sans')),
+        title: const Text("Edit Text", style: TextStyle(fontFamily: 'JosefinSans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
           maxLines: null,
-          style: TextStyle(fontFamily: 'Josefin Sans'),
+          style: TextStyle(fontFamily: 'DeliciousHandrawn'),
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Cancel", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("Save", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Save", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () {
               final newText = _textController.text.trim();
               if (newText.isNotEmpty) {
-                setState(() {
-                  textData.text = newText;
-                });
+                setState(() => textData.text = newText);
               }
               Navigator.pop(context);
             },
@@ -858,14 +801,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'Josefin Sans')),
+        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: textData.color,
           onColorChanged: (color) => setState(() => textData.color = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'Josefin Sans')),
+            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -877,9 +820,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
 Color _parseBackgroundColor(dynamic bgColor) {
   if (bgColor == null) return Colors.white;
   if (bgColor is int) return Color(bgColor);
-  if (bgColor is String) {
-    return Color(int.tryParse(bgColor) ?? Colors.white.value);
-  }
+  if (bgColor is String) return Color(int.tryParse(bgColor) ?? Colors.white.value);
   return Colors.white;
 }
 
@@ -894,12 +835,14 @@ class TextData {
   String font;
   Color color;
   Offset position;
+  double size;
 
   TextData({
     required this.text,
     required this.font,
     required this.color,
     required this.position,
+    this.size = 28,
   });
 
   factory TextData.fromJson(Map<String, dynamic> json) {
@@ -909,21 +852,22 @@ class TextData {
 
     return TextData(
       text: json['text']?.toString() ?? '',
-      font: json['font']?.toString() ?? 'Delius Swash Caps',
+      font: json['font']?.toString() ?? 'DeliciousHandrawn',
       color: Color(json['color'] is int ? json['color'] : Colors.black.value),
       position: Offset(
         (positionData['dx'] ?? 50).toDouble(),
         (positionData['dy'] ?? 50).toDouble(),
       ),
+      size: (json['size'] ?? 28).toDouble(),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'text': text,
-        'font': font,
-        'color': color.value,
-        'position': {'dx': position.dx, 'dy': position.dy},
-      };
+    'text': text,
+    'font': font,
+    'color': color.value,
+    'position': {'dx': position.dx, 'dy': position.dy},
+  };
 }
 
 class DraggableImage extends StatefulWidget {
@@ -965,8 +909,7 @@ class _DraggableImageState extends State<DraggableImage> {
     if (_imageUrl.isEmpty) {
       _hasError = true;
       _isLoading = false;
-    } else if (!_imageUrl.startsWith('http') &&
-        !_imageUrl.startsWith('data:image')) {
+    } else if (!_imageUrl.startsWith('http') && !_imageUrl.startsWith('data:image')) {
       _hasError = true;
       _isLoading = false;
     }
@@ -975,11 +918,8 @@ class _DraggableImageState extends State<DraggableImage> {
   @override
   Widget build(BuildContext context) {
     final position = widget.mediaItem['position'] ?? const Offset(50, 50);
-    final baseWidth = widget.mediaItem['width']?.toDouble() ??
-        (widget.isMobile ? 200.0 : 300.0);
-    final baseHeight = widget.mediaItem['height']?.toDouble() ??
-        (widget.isMobile ? 266.0 : 400.0);
-
+    final baseWidth = widget.mediaItem['width']?.toDouble() ?? (widget.isMobile ? 200.0 : 300.0);
+    final baseHeight = widget.mediaItem['height']?.toDouble() ?? (widget.isMobile ? 266.0 : 400.0);
     final topPosition = min<double>(
       (position.dy + _panOffset.dy).toDouble(),
       (widget.maxHeight - baseHeight * _scale).toDouble(),
@@ -1004,15 +944,12 @@ class _DraggableImageState extends State<DraggableImage> {
                 width: baseWidth,
                 height: baseHeight,
                 decoration: BoxDecoration(
-                  border: _isHovering
-                      ? Border.all(color: Colors.blue, width: 2)
-                      : null,
+                  border: _isHovering ? Border.all(color: Colors.blue, width: 2) : null,
                 ),
                 child: _buildImageContent(baseWidth, baseHeight),
               ),
               if (_isHovering) _buildDeleteButton(),
-              if (_isLoading && !_hasError)
-                Center(child: CircularProgressIndicator()),
+              if (_isLoading && !_hasError) Center(child: CircularProgressIndicator()),
             ],
           ),
         ),
@@ -1021,10 +958,7 @@ class _DraggableImageState extends State<DraggableImage> {
   }
 
   Widget _buildImageContent(double width, double height) {
-    if (widget.mediaItem['hasError'] == true) {
-      return _buildErrorPlaceholder(width, height);
-    }
-
+    if (widget.mediaItem['hasError'] == true) return _buildErrorPlaceholder(width, height);
     final imageUrl = widget.mediaItem['value'] ?? '';
 
     if (imageUrl.startsWith('data:image')) {
@@ -1045,10 +979,7 @@ class _DraggableImageState extends State<DraggableImage> {
         width: width,
         height: height,
         fit: BoxFit.cover,
-        loadingBuilder: (_, child, progress) {
-          if (progress == null) return child;
-          return Center(child: CircularProgressIndicator());
-        },
+        loadingBuilder: (_, child, progress) => progress == null ? child : Center(child: CircularProgressIndicator()),
         errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
       );
     } else if (widget.mediaItem['fileId'] != null) {
@@ -1087,7 +1018,7 @@ class _DraggableImageState extends State<DraggableImage> {
         children: const [
           Icon(Icons.broken_image, size: 40),
           SizedBox(height: 8),
-          Text('Failed to load image', style: TextStyle(fontSize: 12, fontFamily: 'Josefin Sans')),
+          Text('Failed to load image', style: TextStyle(fontSize: 12, fontFamily: 'JosefinSans')),
         ],
       ),
     );
@@ -1119,12 +1050,8 @@ class _DraggableImageState extends State<DraggableImage> {
         (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
         (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
       ),
-      'width':
-          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
-              _scale,
-      'height':
-          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
-              _scale,
+      'width': (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) * _scale,
+      'height': (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) * _scale,
     });
     _panOffset = Offset.zero;
   }
@@ -1132,12 +1059,8 @@ class _DraggableImageState extends State<DraggableImage> {
   void _updateMediaItem() {
     widget.onPositionChanged({
       ...widget.mediaItem,
-      'width':
-          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
-              _scale,
-      'height':
-          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
-              _scale,
+      'width': (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) * _scale,
+      'height': (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) * _scale,
     });
   }
 }
