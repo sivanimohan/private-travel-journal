@@ -12,6 +12,8 @@ import 'youtube_audio_extractor.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart';
 import 'package:http/http.dart' as http;
 import 'location_page.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 
 final String bucketId = '67cd36510039f3d96c62';
 
@@ -56,6 +58,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
   List<TextData> textDataList = [];
   bool isAddingText = false;
   String selectedFont = 'DeliciousHandrawn';
+  Map<String, VideoPlayerController> videoControllers = {};
+  Map<String, ChewieController> chewieControllers = {};
   Color selectedTextColor = Colors.black;
   List<String> fonts = [
     'DeliciousHandrawn',
@@ -89,7 +93,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   @override
+  @override
   void dispose() {
+    // Dispose video controllers
+    for (var controller in videoControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in chewieControllers.values) {
+      controller.dispose();
+    }
     _audioPlayer.dispose();
     super.dispose();
   }
@@ -121,7 +133,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   onPressed: _toggleAudioPlayback,
                 ),
                 SizedBox(width: 8),
-                Text('Audio Player', style: TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
+                Text('Audio Player',
+                    style: TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
                 SizedBox(width: 16),
                 SizedBox(
                   width: 100,
@@ -161,8 +174,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
       });
 
       await _audioPlayer.stop();
-      await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
-      final audioUrl = await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
+      await _audioPlayer
+          .setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
+      final audioUrl =
+          await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
       await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(audioUrl)));
       await _audioPlayer.setVolume(_audioVolume);
       await _audioPlayer.play();
@@ -173,7 +188,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
           _isLoadingAudio = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.toString()}', style: TextStyle(fontFamily: 'JosefinSans'))),
+          SnackBar(
+              content: Text('Error: ${e.toString()}',
+                  style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
       if (kDebugMode) print('Error playing audio: $e');
@@ -188,8 +205,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   void _toggleAudioPlayback() async {
-    if (_isAudioPlaying) await _stopAllAudio();
-    else await _playAllAudio();
+    if (_isAudioPlaying)
+      await _stopAllAudio();
+    else
+      await _playAllAudio();
   }
 
   void _setAudioVolume(double volume) {
@@ -201,13 +220,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
   Future<void> _saveContent() async {
     try {
       setState(() => isSavingLocation = true);
-      final textDataToSave = textDataList.map((text) => [
-            text.text,
-            text.font,
-            text.color.value,
-            text.position.dx.toInt(),
-            text.position.dy.toInt(),
-          ]).toList();
+      final textDataToSave = textDataList
+          .map((text) => [
+                text.text,
+                text.font,
+                text.color.value,
+                text.position.dx.toInt(),
+                text.position.dy.toInt(),
+              ])
+          .toList();
 
       final documentData = {
         'pageId': widget.pageId,
@@ -231,7 +252,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Save failed: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
+          SnackBar(
+              content: Text('Save failed: $e',
+                  style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
       rethrow;
@@ -289,7 +312,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
           }
         }
 
-        media = (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
+        media =
+            (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
           return {
             'type': 'image',
             'fileId': item is String ? item : '',
@@ -305,7 +329,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
       debugPrint('Error loading content: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading content: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
+          SnackBar(
+              content: Text('Error loading content: $e',
+                  style: TextStyle(fontFamily: 'JosefinSans'))),
         );
       }
     }
@@ -318,6 +344,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         if (item['fileId'] != null && item['value'] == null) {
           try {
             if (kIsWeb) {
+              // Load file for web
               final response = await storage.getFileView(
                 bucketId: bucketId,
                 fileId: item['fileId'],
@@ -327,83 +354,238 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 fileId: item['fileId'],
               );
               final mimeType = _getMimeType(file.name);
-              media[i]['value'] = "data:$mimeType;base64,${base64Encode(response)}";
+
+              // Set media value for web
+              media[i]['value'] =
+                  "data:$mimeType;base64,${base64Encode(response)}";
+
+              // Initialize video player if this is a video
+              if (item['type'] == 'video') {
+                await _initializeVideoPlayer(
+                    item['fileId'], file.name, response);
+              }
             } else {
+              // Load file for mobile
               final url = await storage.getFileDownload(
                 bucketId: bucketId,
                 fileId: item['fileId'],
               );
               media[i]['value'] = url.toString();
+
+              // Initialize video player if this is a video
+              if (item['type'] == 'video') {
+                await _initializeVideoPlayer(item['fileId'], '', Uint8List(0));
+              }
             }
           } catch (e) {
             debugPrint('Error loading file ${item['fileId']}: $e');
             media[i]['hasError'] = true;
+
+            // Remove from video controllers if failed
+            if (item['type'] == 'video') {
+              videoControllers.remove(item['fileId']);
+              chewieControllers.remove(item['fileId']);
+            }
           }
         }
       }
       setState(() {});
     } catch (e) {
       debugPrint('Error in _loadMediaData: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading media: ${e.toString()}',
+                style: TextStyle(fontFamily: 'Josefin Sans')),
+          ),
+        );
+      }
     }
   }
 
   String _getMimeType(String filename) {
     final ext = filename.split('.').last.toLowerCase();
     switch (ext) {
-      case 'jpg': case 'jpeg': return 'image/jpeg';
-      case 'png': return 'image/png';
-      case 'gif': return 'image/gif';
-      case 'webp': return 'image/webp';
-      default: return 'image/jpeg';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
+      default:
+        return 'image/jpeg';
     }
   }
 
   Future<void> _addMedia(String type) async {
     try {
-      final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
+      final XFile? file;
+      if (type == 'image') {
+        file = await _picker.pickImage(source: ImageSource.gallery);
+      } else if (type == 'video') {
+        file = await _picker.pickVideo(
+          source: ImageSource.gallery,
+          maxDuration: const Duration(minutes: 10), // Optional duration limit
+        );
+      } else {
+        return;
+      }
+
       if (file == null || !mounted) return;
+
+      // Show caption dialog
+      final caption = await showDialog<String>(
+        context: context,
+        builder: (context) {
+          final controller = TextEditingController();
+          return AlertDialog(
+            title: Text('Add ${type == 'image' ? 'Image' : 'Video'} Caption',
+                style: TextStyle(fontFamily: 'Josefin Sans')),
+            content: TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                hintText: 'Write a caption...',
+                hintStyle: TextStyle(fontFamily: 'Josefin Sans'),
+              ),
+            ),
+            actions: [
+              TextButton(
+                child: Text('Cancel',
+                    style: TextStyle(fontFamily: 'Josefin Sans')),
+                onPressed: () => Navigator.pop(context),
+              ),
+              TextButton(
+                child: Text('OK', style: TextStyle(fontFamily: 'Josefin Sans')),
+                onPressed: () => Navigator.pop(context, controller.text),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (caption == null) return; // User cancelled
 
       final bytes = await file.readAsBytes();
       final fileName = file.name;
+      final fileId = ID.unique();
+
+      // Upload to storage
       final uploadedFile = await storage.createFile(
         bucketId: bucketId,
-        fileId: ID.unique(),
-        file: InputFile.fromBytes(bytes: bytes, filename: fileName),
+        fileId: fileId,
+        file: InputFile.fromBytes(
+          bytes: bytes,
+          filename: fileName,
+        ),
       );
 
-      if (kIsWeb) {
-        final mimeType = _getMimeType(fileName);
-        setState(() {
-          media.add({
-            'type': type,
-            'fileId': uploadedFile.$id,
-            'value': "data:$mimeType;base64,${base64Encode(bytes)}",
-            'position': const Offset(50, 50),
-            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
-            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
-          });
+      // Add to media list
+      setState(() {
+        media.add({
+          'type': type,
+          'fileId': uploadedFile.$id,
+          'value': type == 'image' && kIsWeb
+              ? "data:${_getMimeType(fileName)};base64,${base64Encode(bytes)}"
+              : null,
+          'position': Offset(50, 50),
+          'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
+          'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
+          'caption': caption,
+          'font': selectedFont,
+          'textColor': selectedTextColor.value,
         });
-      } else {
-        setState(() {
-          media.add({
-            'type': type,
-            'fileId': uploadedFile.$id,
-            'position': const Offset(50, 50),
-            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
-            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
-          });
-        });
+      });
+
+      // Initialize video player if video
+      if (type == 'video') {
+        await _initializeVideoPlayer(uploadedFile.$id, fileName, bytes);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to add media: ${e.toString()}', style: TextStyle(fontFamily: 'JosefinSans')),
-            duration: const Duration(seconds: 2),
+            content: Text(
+              'Failed to add ${type == 'image' ? 'image' : 'video'}: ${e.toString()}',
+              style: TextStyle(fontFamily: 'Josefin Sans'),
+            ),
+            duration: Duration(seconds: 2),
           ),
         );
       }
       debugPrint('Failed to add media: $e');
+    }
+  }
+
+  Future<void> _initializeVideoPlayer(
+      String fileId, String fileName, Uint8List bytes) async {
+    try {
+      VideoPlayerController controller;
+
+      if (kIsWeb) {
+        // For web, use base64 encoded data URL
+        final mimeType = _getMimeType(fileName);
+        controller = VideoPlayerController.network(
+          "data:$mimeType;base64,${base64Encode(bytes)}",
+        );
+      } else {
+        // For mobile, get download URL
+        final url = await storage.getFileDownload(
+          bucketId: bucketId,
+          fileId: fileId,
+        );
+        controller = VideoPlayerController.network(url.toString());
+      }
+
+      // Initialize controller
+      await controller.initialize();
+
+      // Configure Chewie controller
+      final chewieController = ChewieController(
+        videoPlayerController: controller,
+        autoPlay: false,
+        looping: false,
+        allowFullScreen: true,
+        allowMuting: true,
+        showControls: true,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: Colors.blue,
+          handleColor: Colors.blueAccent,
+          backgroundColor: Colors.grey,
+          bufferedColor: Colors.grey.shade300,
+        ),
+        placeholder: Container(
+          color: Colors.grey[200],
+          child: Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+        autoInitialize: true,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        videoControllers[fileId] = controller;
+        chewieControllers[fileId] = chewieController;
+      });
+    } catch (e) {
+      debugPrint('Error initializing video player: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Failed to initialize video player',
+              style: TextStyle(fontFamily: 'Josefin Sans'),
+            ),
+          ),
+        );
+      }
+
+      // Clean up if initialization fails
+      videoControllers.remove(fileId)?.dispose();
     }
   }
 
@@ -413,7 +595,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Enter Text", style: TextStyle(fontFamily: 'JosefinSans')),
+        title: const Text("Enter Text",
+            style: TextStyle(fontFamily: 'JosefinSans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
@@ -426,11 +609,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel", style: TextStyle(fontFamily: 'JosefinSans')),
+            child: const Text("Cancel",
+                style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("OK", style: TextStyle(fontFamily: 'JosefinSans')),
+            child:
+                const Text("OK", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () {
               final text = _textController.text.trim();
               if (text.isNotEmpty) {
@@ -456,51 +641,87 @@ class _A4WhitePageState extends State<A4WhitePage> {
   void _showOptionsMenu() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.text_fields),
-              title: const Text('Text', style: TextStyle(fontFamily: 'JosefinSans')),
-              onTap: () {
-                Navigator.pop(context);
-                setState(() => isAddingText = true);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.color_lens),
-              title: const Text('Text Color', style: TextStyle(fontFamily: 'JosefinSans')),
-              onTap: () {
-                Navigator.pop(context);
-                _showTextColorPicker();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.image),
-              title: const Text('Image', style: TextStyle(fontFamily: 'JosefinSans')),
-              onTap: () {
-                Navigator.pop(context);
-                _addMedia('image');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.audiotrack),
-              title: const Text('Audio', style: TextStyle(fontFamily: 'JosefinSans')),
-              onTap: () {
-                Navigator.pop(context);
-                _addAudio();
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.format_paint),
-              title: const Text('Background Color', style: TextStyle(fontFamily: 'JosefinSans')),
-              onTap: () {
-                Navigator.pop(context);
-                _changeBackgroundColor();
-              },
-            ),
-          ],
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(height: 8),
+              Container(
+                height: 4,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              SizedBox(height: 8),
+              ListTile(
+                leading: Icon(Icons.text_fields, color: Colors.blue),
+                title: Text('Add Text',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  setState(() => isAddingText = true);
+                },
+              ),
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.color_lens, color: Colors.purple),
+                title: Text('Text Color',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showTextColorPicker();
+                },
+              ),
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.image, color: Colors.green),
+                title: Text('Add Image',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _addMedia('image');
+                },
+              ),
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.videocam, color: Colors.red),
+                title: Text('Add Video',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _addMedia('video');
+                },
+              ),
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.audiotrack, color: Colors.orange),
+                title: Text('Add Audio',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _addAudio();
+                },
+              ),
+              Divider(height: 1),
+              ListTile(
+                leading: Icon(Icons.format_paint, color: Colors.teal),
+                title: Text('Background Color',
+                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
+                onTap: () {
+                  Navigator.pop(context);
+                  _changeBackgroundColor();
+                },
+              ),
+              SizedBox(height: MediaQuery.of(context).viewInsets.bottom),
+            ],
+          ),
         ),
       ),
     );
@@ -510,14 +731,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'JosefinSans')),
+        title: const Text("Choose Text Color",
+            style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: selectedTextColor,
           onColorChanged: (color) => setState(() => selectedTextColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
+            child:
+                const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -529,14 +752,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Background Color", style: TextStyle(fontFamily: 'JosefinSans')),
+        title: const Text("Choose Background Color",
+            style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: backgroundColor,
           onColorChanged: (color) => setState(() => backgroundColor = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
+            child:
+                const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -553,12 +778,15 @@ class _A4WhitePageState extends State<A4WhitePage> {
       appBar: AppBar(
         title: Row(
           children: [
-            Text(widget.pageName, overflow: TextOverflow.ellipsis, style: TextStyle(fontFamily: 'JosefinSans')),
+            Text(widget.pageName,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontFamily: 'JosefinSans')),
             if (selectedLocation != null && !isMobile)
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
                 child: Text('Location: $selectedLocation',
-                    style: const TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
+                    style: const TextStyle(
+                        fontSize: 14, fontFamily: 'JosefinSans')),
               ),
           ],
         ),
@@ -577,7 +805,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   builder: (context) => LocationPage(
                     userId: widget.userId,
                     databases: databases,
-                    existingLocations: selectedLocation != null ? [selectedLocation!] : [],
+                    existingLocations:
+                        selectedLocation != null ? [selectedLocation!] : [],
                   ),
                 ),
               );
@@ -593,13 +822,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                          content: Text('Location saved successfully!', style: TextStyle(fontFamily: 'JosefinSans'))),
+                          content: Text('Location saved successfully!',
+                              style: TextStyle(fontFamily: 'JosefinSans'))),
                     );
                   }
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to save location: $e', style: TextStyle(fontFamily: 'JosefinSans'))),
+                      SnackBar(
+                          content: Text('Failed to save location: $e',
+                              style: TextStyle(fontFamily: 'JosefinSans'))),
                     );
                   }
                 } finally {
@@ -616,7 +848,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
           double contentHeight = [
             constraints.maxHeight,
             100.0 + (textDataList.length * 30.0),
-            media.fold(0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
+            media.fold(0.0,
+                (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
           ].reduce(max);
 
           return SingleChildScrollView(
@@ -627,7 +860,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
                   if (isAddingText) {
                     final renderBox = context.findRenderObject() as RenderBox;
                     final tapPosition = renderBox.globalToLocal(
-                      (context.findRenderObject() as RenderBox).localToGlobal(Offset.zero),
+                      (context.findRenderObject() as RenderBox)
+                          .localToGlobal(Offset.zero),
                     );
                     _addText(tapPosition);
                   }
@@ -660,7 +894,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
     final elements = <Widget>[];
     final screenHeight = MediaQuery.of(context).size.height;
     final textHeight = 100.0 + (textDataList.length * 30.0);
-    final mediaHeight = media.fold(0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
+    final mediaHeight = media.fold(
+        0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
     final contentHeight = [screenHeight, textHeight, mediaHeight].reduce(max);
 
     for (var textData in textDataList) {
@@ -675,16 +910,21 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
     for (int i = 0; i < media.length; i++) {
       final mediaItem = media[i];
-      final itemHeight = (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
+      final itemHeight =
+          (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
 
       elements.add(
         Positioned(
           left: mediaItem['position'].dx,
-          top: min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
+          top:
+              min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
           child: DraggableImage(
             key: ValueKey('image_${mediaItem['fileId']}_$i'),
             mediaItem: mediaItem,
-            onPositionChanged: (updatedItem) => setState(() => media[i] = updatedItem),
+            videoControllers: videoControllers,
+            chewieControllers: chewieControllers,
+            onPositionChanged: (updatedItem) =>
+                setState(() => media[i] = updatedItem),
             onDelete: () => setState(() => media.removeAt(i)),
             isMobile: isMobile,
             maxHeight: contentHeight,
@@ -696,7 +936,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
     return elements;
   }
 
-  Widget _buildDraggableText(TextData textData, bool isMobile, double contentHeight) {
+  Widget _buildDraggableText(
+      TextData textData, bool isMobile, double contentHeight) {
     return Draggable(
       feedback: Material(
         child: Text(
@@ -737,7 +978,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
         children: [
           ListTile(
             leading: const Icon(Icons.edit),
-            title: const Text('Edit Text', style: TextStyle(fontFamily: 'JosefinSans')),
+            title: const Text('Edit Text',
+                style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
               Navigator.pop(context);
               _editText(textData);
@@ -745,7 +987,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
           ),
           ListTile(
             leading: const Icon(Icons.delete),
-            title: const Text('Delete', style: TextStyle(fontFamily: 'JosefinSans')),
+            title: const Text('Delete',
+                style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
               setState(() => textDataList.remove(textData));
               Navigator.pop(context);
@@ -753,7 +996,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
           ),
           ListTile(
             leading: const Icon(Icons.color_lens),
-            title: const Text('Change Color', style: TextStyle(fontFamily: 'JosefinSans')),
+            title: const Text('Change Color',
+                style: TextStyle(fontFamily: 'JosefinSans')),
             onTap: () {
               Navigator.pop(context);
               _changeTextColor(textData);
@@ -765,12 +1009,14 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   void _editText(TextData textData) {
-    final TextEditingController _textController = TextEditingController(text: textData.text);
+    final TextEditingController _textController =
+        TextEditingController(text: textData.text);
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Edit Text", style: TextStyle(fontFamily: 'JosefinSans')),
+        title: const Text("Edit Text",
+            style: TextStyle(fontFamily: 'JosefinSans')),
         content: TextField(
           controller: _textController,
           autofocus: true,
@@ -779,11 +1025,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
         ),
         actions: [
           TextButton(
-            child: const Text("Cancel", style: TextStyle(fontFamily: 'JosefinSans')),
+            child: const Text("Cancel",
+                style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
           TextButton(
-            child: const Text("Save", style: TextStyle(fontFamily: 'JosefinSans')),
+            child:
+                const Text("Save", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () {
               final newText = _textController.text.trim();
               if (newText.isNotEmpty) {
@@ -801,14 +1049,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color", style: TextStyle(fontFamily: 'JosefinSans')),
+        title: const Text("Choose Text Color",
+            style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: textData.color,
           onColorChanged: (color) => setState(() => textData.color = color),
         ),
         actions: [
           TextButton(
-            child: const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
+            child:
+                const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
             onPressed: () => Navigator.pop(context),
           ),
         ],
@@ -820,7 +1070,8 @@ class _A4WhitePageState extends State<A4WhitePage> {
 Color _parseBackgroundColor(dynamic bgColor) {
   if (bgColor == null) return Colors.white;
   if (bgColor is int) return Color(bgColor);
-  if (bgColor is String) return Color(int.tryParse(bgColor) ?? Colors.white.value);
+  if (bgColor is String)
+    return Color(int.tryParse(bgColor) ?? Colors.white.value);
   return Colors.white;
 }
 
@@ -863,11 +1114,11 @@ class TextData {
   }
 
   Map<String, dynamic> toJson() => {
-    'text': text,
-    'font': font,
-    'color': color.value,
-    'position': {'dx': position.dx, 'dy': position.dy},
-  };
+        'text': text,
+        'font': font,
+        'color': color.value,
+        'position': {'dx': position.dx, 'dy': position.dy},
+      };
 }
 
 class DraggableImage extends StatefulWidget {
@@ -876,6 +1127,8 @@ class DraggableImage extends StatefulWidget {
   final Function() onDelete;
   final bool isMobile;
   final double maxHeight;
+  final Map<String, VideoPlayerController> videoControllers;
+  final Map<String, ChewieController> chewieControllers;
 
   const DraggableImage({
     super.key,
@@ -884,6 +1137,8 @@ class DraggableImage extends StatefulWidget {
     required this.onDelete,
     required this.isMobile,
     required this.maxHeight,
+    required this.videoControllers,
+    required this.chewieControllers,
   });
 
   @override
@@ -896,20 +1151,21 @@ class _DraggableImageState extends State<DraggableImage> {
   Offset _panOffset = Offset.zero;
   bool _isLoading = true;
   bool _hasError = false;
-  late String _imageUrl;
 
   @override
   void initState() {
     super.initState();
-    _imageUrl = widget.mediaItem['value'] ?? '';
-    _validateImageUrl();
+    _validateMediaUrl();
   }
 
-  void _validateImageUrl() {
-    if (_imageUrl.isEmpty) {
+  void _validateMediaUrl() {
+    final mediaUrl = widget.mediaItem['value'] ?? '';
+    if (mediaUrl.isEmpty) {
       _hasError = true;
       _isLoading = false;
-    } else if (!_imageUrl.startsWith('http') && !_imageUrl.startsWith('data:image')) {
+    } else if (widget.mediaItem['type'] != 'video' &&
+        !mediaUrl.startsWith('http') &&
+        !mediaUrl.startsWith('data:image')) {
       _hasError = true;
       _isLoading = false;
     }
@@ -918,8 +1174,11 @@ class _DraggableImageState extends State<DraggableImage> {
   @override
   Widget build(BuildContext context) {
     final position = widget.mediaItem['position'] ?? const Offset(50, 50);
-    final baseWidth = widget.mediaItem['width']?.toDouble() ?? (widget.isMobile ? 200.0 : 300.0);
-    final baseHeight = widget.mediaItem['height']?.toDouble() ?? (widget.isMobile ? 266.0 : 400.0);
+    final baseWidth = widget.mediaItem['width']?.toDouble() ??
+        (widget.isMobile ? 200.0 : 300.0);
+    final baseHeight = widget.mediaItem['height']?.toDouble() ??
+        (widget.isMobile ? 266.0 : 400.0);
+
     final topPosition = min<double>(
       (position.dy + _panOffset.dy).toDouble(),
       (widget.maxHeight - baseHeight * _scale).toDouble(),
@@ -944,12 +1203,15 @@ class _DraggableImageState extends State<DraggableImage> {
                 width: baseWidth,
                 height: baseHeight,
                 decoration: BoxDecoration(
-                  border: _isHovering ? Border.all(color: Colors.blue, width: 2) : null,
+                  border: _isHovering
+                      ? Border.all(color: Colors.blue, width: 2)
+                      : null,
                 ),
                 child: _buildImageContent(baseWidth, baseHeight),
               ),
               if (_isHovering) _buildDeleteButton(),
-              if (_isLoading && !_hasError) Center(child: CircularProgressIndicator()),
+              if (_isLoading && !_hasError)
+                Center(child: CircularProgressIndicator()),
             ],
           ),
         ),
@@ -958,13 +1220,67 @@ class _DraggableImageState extends State<DraggableImage> {
   }
 
   Widget _buildImageContent(double width, double height) {
-    if (widget.mediaItem['hasError'] == true) return _buildErrorPlaceholder(width, height);
-    final imageUrl = widget.mediaItem['value'] ?? '';
+    if (widget.mediaItem['hasError'] == true) {
+      return _buildErrorPlaceholder(width, height);
+    }
 
-    if (imageUrl.startsWith('data:image')) {
+    final mediaUrl = widget.mediaItem['value'] ?? '';
+    final isVideo = widget.mediaItem['type'] == 'video';
+
+    if (isVideo) {
+      final fileId = widget.mediaItem['fileId'];
+      final chewieController = widget.chewieControllers[fileId];
+
+      if (chewieController == null) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 8),
+              Text('Loading video...',
+                  style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 12)),
+            ],
+          ),
+        );
+      }
+
+      return Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.black,
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Stack(
+          children: [
+            Chewie(controller: chewieController),
+            if (_isHovering)
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                child: Container(
+                  color: Colors.black.withOpacity(0.3),
+                  child: Center(
+                    child: Icon(
+                      Icons.play_circle_fill,
+                      color: Colors.white,
+                      size: 50,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }
+
+    if (mediaUrl.startsWith('data:image')) {
       try {
         return Image.memory(
-          base64Decode(imageUrl.split(',').last),
+          base64Decode(mediaUrl.split(',').last),
           width: width,
           height: height,
           fit: BoxFit.cover,
@@ -973,17 +1289,33 @@ class _DraggableImageState extends State<DraggableImage> {
       } catch (e) {
         return _buildErrorPlaceholder(width, height);
       }
-    } else if (imageUrl.startsWith('http')) {
+    } else if (mediaUrl.startsWith('http')) {
       return Image.network(
-        imageUrl,
+        mediaUrl,
         width: width,
         height: height,
         fit: BoxFit.cover,
-        loadingBuilder: (_, child, progress) => progress == null ? child : Center(child: CircularProgressIndicator()),
+        loadingBuilder: (_, child, progress) {
+          if (progress == null) {
+            _isLoading = false;
+            return child;
+          }
+          return Center(child: CircularProgressIndicator());
+        },
         errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
       );
     } else if (widget.mediaItem['fileId'] != null) {
-      return Center(child: CircularProgressIndicator());
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 8),
+            Text('Loading media...',
+                style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 12)),
+          ],
+        ),
+      );
     }
 
     return _buildErrorPlaceholder(width, height);
@@ -994,7 +1326,6 @@ class _DraggableImageState extends State<DraggableImage> {
       right: 8,
       top: 8,
       child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
         onTap: widget.onDelete,
         child: Container(
           padding: const EdgeInsets.all(4),
@@ -1018,7 +1349,8 @@ class _DraggableImageState extends State<DraggableImage> {
         children: const [
           Icon(Icons.broken_image, size: 40),
           SizedBox(height: 8),
-          Text('Failed to load image', style: TextStyle(fontSize: 12, fontFamily: 'JosefinSans')),
+          Text('Failed to load media',
+              style: TextStyle(fontSize: 12, fontFamily: 'Josefin Sans')),
         ],
       ),
     );
@@ -1050,8 +1382,12 @@ class _DraggableImageState extends State<DraggableImage> {
         (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
         (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
       ),
-      'width': (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) * _scale,
-      'height': (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) * _scale,
+      'width':
+          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+              _scale,
+      'height':
+          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+              _scale,
     });
     _panOffset = Offset.zero;
   }
@@ -1059,8 +1395,12 @@ class _DraggableImageState extends State<DraggableImage> {
   void _updateMediaItem() {
     widget.onPositionChanged({
       ...widget.mediaItem,
-      'width': (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) * _scale,
-      'height': (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) * _scale,
+      'width':
+          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+              _scale,
+      'height':
+          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+              _scale,
     });
   }
 }

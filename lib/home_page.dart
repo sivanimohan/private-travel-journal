@@ -4,7 +4,8 @@ import 'package:appwrite/models.dart' as models;
 import 'create_folder.dart';
 import 'folder.dart';
 import 'dart:io';
-import 'world_map_page.dart'; // Import the new WorldMapPage
+import 'world_map_page.dart';
+import 'insight.dart';
 
 class HomePage extends StatefulWidget {
   final Client client;
@@ -277,7 +278,8 @@ class _HomePageState extends State<HomePage> {
                                     Text(
                                       folder['name'],
                                       style: const TextStyle(
-                                        fontFamily: 'JosefinSans', // Font changed
+                                        fontFamily:
+                                            'JosefinSans', // Font changed
                                         fontSize: 18,
                                         fontWeight: FontWeight.w500,
                                         color: Color(0xFF2C7DA0),
@@ -297,6 +299,25 @@ class _HomePageState extends State<HomePage> {
                       ),
               ),
             ],
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => InsightPage(
+                      databases: databases,
+                      userId: widget.userId,
+                    ),
+                  ),
+                );
+              },
+              backgroundColor: const Color(0xFF2C7DA0),
+              child: const Icon(Icons.insights),
+            ),
           ),
           Positioned(
             left: 16,

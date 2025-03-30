@@ -13,6 +13,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   google_fonts: ^6.2.1
   flutter_colorpicker: ^1.1.0
+  chewie: ^1.5.0
   image_picker: ^1.1.2
   video_player: ^2.9.3
   audioplayers: ^5.0.0
@@ -47,7 +48,7 @@ flutter:
     - assets/loginpage.jpg
     - assets/google.png
     - assets/homepage.jpg
-    - fonts/DeliciousHandrawn-Regular.ttf  # Make sure to add the font file
+    - fonts/DeliciousHandrawn-Regular.ttf
   fonts:
     - family: DeliciousHandrawn
       fonts:
