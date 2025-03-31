@@ -56,7 +56,7 @@ class _SignUpPageState extends State<SignUpPage> {
       // Save user data in the database
       await database.createDocument(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbe1ce00196895cd13',
+        collectionId: '67eab73a002efac8d01e',
         documentId: user.$id,
         data: {
           'userId': user.$id,
@@ -115,14 +115,14 @@ class _SignUpPageState extends State<SignUpPage> {
         // Check if user already exists in database
         await database.getDocument(
           databaseId: '67c32fc700070ceeadac',
-          collectionId: '67cbe1ce00196895cd13',
+          collectionId: '67eab73a002efac8d01e',
           documentId: user.$id,
         );
       } catch (_) {
         // Create user document if not found
         await database.createDocument(
           databaseId: '67c32fc700070ceeadac',
-          collectionId: '67cbe1ce00196895cd13',
+          collectionId: '67eab73a002efac8d01e',
           documentId: user.$id,
           data: {
             'userId': user.$id,

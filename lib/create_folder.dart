@@ -46,7 +46,7 @@ class _CreateFolderPageState extends State<CreateFolderPage> {
     try {
       await databases.createDocument(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbebb60023c51812a1',
+        collectionId: '67eab63d001054f7631a',
         documentId: ID.unique(),
         data: {
           'folderId': ID.unique(),

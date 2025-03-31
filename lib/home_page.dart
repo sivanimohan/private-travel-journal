@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
     try {
       final result = await databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbebb60023c51812a1',
+        collectionId: '67eab63d001054f7631a',
         queries: [
           Query.equal('userId', widget.userId),
         ],
@@ -88,7 +88,7 @@ class _HomePageState extends State<HomePage> {
 
         await databases.createDocument(
           databaseId: '67c32fc700070ceeadac',
-          collectionId: '67cbebb60023c51812a1',
+          collectionId: '67eab63d001054f7631a',
           documentId: ID.unique(),
           data: {
             'folderId': ID.unique(),

@@ -2,18 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
 import 'package:appwrite/appwrite.dart';
-import 'package:just_audio/just_audio.dart';
 import 'dart:convert';
-import 'audio_page.dart';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'dart:math';
-import 'youtube_audio_extractor.dart';
-import 'package:youtube_explode_dart/youtube_explode_dart.dart';
-import 'package:http/http.dart' as http;
 import 'location_page.dart';
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
 
 final String bucketId = '67cd36510039f3d96c62';
 
@@ -48,18 +41,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
   bool isSavingLocation = false;
   List<String> locations = [];
 
-  // Audio player implementation
-  final AudioPlayer _audioPlayer = AudioPlayer();
-  List<String> audioIds = [];
-  bool _isAudioPlaying = false;
-  double _audioVolume = 0.5;
-
   // Text input
   List<TextData> textDataList = [];
   bool isAddingText = false;
   String selectedFont = 'DeliciousHandrawn';
-  Map<String, VideoPlayerController> videoControllers = {};
-  Map<String, ChewieController> chewieControllers = {};
   Color selectedTextColor = Colors.black;
   List<String> fonts = [
     'DeliciousHandrawn',
@@ -71,164 +56,29 @@ class _A4WhitePageState extends State<A4WhitePage> {
     super.initState();
     databases = Databases(widget.client);
     storage = Storage(widget.client);
-
-    _audioPlayer.playbackEventStream.listen((event) {
-      if (mounted) {
-        setState(() {
-          _isAudioPlaying = _audioPlayer.playing;
-        });
-      }
-    }, onError: (e) {
-      debugPrint('Audio player error: $e');
-      if (mounted) {
-        setState(() {
-          _isAudioPlaying = false;
-          _isLoadingAudio = false;
-        });
-      }
-    });
-
     _loadSavedContent();
     textDataList = [];
   }
 
   @override
-  @override
   void dispose() {
-    // Dispose video controllers
-    for (var controller in videoControllers.values) {
-      controller.dispose();
-    }
-    for (var controller in chewieControllers.values) {
-      controller.dispose();
-    }
-    _audioPlayer.dispose();
     super.dispose();
-  }
-
-  List<Widget> _buildAudioPlayers() {
-    return [
-      if (audioIds.isNotEmpty)
-        Positioned(
-          bottom: 20,
-          left: 20,
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(_isAudioPlaying ? Icons.pause : Icons.play_arrow),
-                  onPressed: _toggleAudioPlayback,
-                ),
-                SizedBox(width: 8),
-                Text('Audio Player',
-                    style: TextStyle(fontSize: 14, fontFamily: 'JosefinSans')),
-                SizedBox(width: 16),
-                SizedBox(
-                  width: 100,
-                  child: Slider(
-                    value: _audioVolume * 100,
-                    min: 0,
-                    max: 100,
-                    onChanged: _setAudioVolume,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-    ];
-  }
-
-  Future<void> _addAudio() async {
-    final videoId = await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const AudioPage()),
-    );
-
-    if (videoId != null && mounted) {
-      setState(() => audioIds.add(videoId));
-    }
-  }
-
-  bool _isLoadingAudio = false;
-  Future<void> _playAllAudio() async {
-    if (audioIds.isEmpty || !mounted) return;
-
-    try {
-      setState(() {
-        _isLoadingAudio = true;
-        _isAudioPlaying = true;
-      });
-
-      await _audioPlayer.stop();
-      await _audioPlayer
-          .setAudioSource(AudioSource.uri(Uri.parse('about:blank')));
-      final audioUrl =
-          await YouTubeAudioExtractor.getAudioStreamUrl(audioIds.last);
-      await _audioPlayer.setAudioSource(AudioSource.uri(Uri.parse(audioUrl)));
-      await _audioPlayer.setVolume(_audioVolume);
-      await _audioPlayer.play();
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isAudioPlaying = false;
-          _isLoadingAudio = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-              content: Text('Error: ${e.toString()}',
-                  style: TextStyle(fontFamily: 'JosefinSans'))),
-        );
-      }
-      if (kDebugMode) print('Error playing audio: $e');
-    } finally {
-      if (mounted) setState(() => _isLoadingAudio = false);
-    }
-  }
-
-  Future<void> _stopAllAudio() async {
-    await _audioPlayer.stop();
-    if (mounted) setState(() => _isAudioPlaying = false);
-  }
-
-  void _toggleAudioPlayback() async {
-    if (_isAudioPlaying)
-      await _stopAllAudio();
-    else
-      await _playAllAudio();
-  }
-
-  void _setAudioVolume(double volume) {
-    final newVolume = volume / 100;
-    setState(() => _audioVolume = newVolume);
-    _audioPlayer.setVolume(newVolume);
   }
 
   Future<void> _saveContent() async {
     try {
       setState(() => isSavingLocation = true);
-      final textDataToSave = textDataList
-          .map((text) => [
-                text.text,
-                text.font,
-                text.color.value,
-                text.position.dx.toInt(),
-                text.position.dy.toInt(),
-              ])
-          .toList();
+      final textDataToSave = jsonEncode(textDataList.map((text) {
+        return {
+          'text': text.text,
+          'font': text.font,
+          'color': text.color.value,
+          'position': {'dx': text.position.dx, 'dy': text.position.dy},
+          'size': text.size,
+        };
+      }).toList());
+
+      final mediaDataToSave = media.map((m) => m['fileId'] as String).toList();
 
       final documentData = {
         'pageId': widget.pageId,
@@ -236,26 +86,41 @@ class _A4WhitePageState extends State<A4WhitePage> {
         'folderId': widget.folderId,
         'pageName': widget.pageName,
         'backgroundColor': backgroundColor.value,
-        'media': media.map((m) => m['fileId'] ?? '').toList(),
-        'textData': jsonEncode(textDataToSave),
+        'media': mediaDataToSave,
+        'textData': textDataToSave,
         'location': selectedLocation ?? '',
-        'updatedAt': DateTime.now().toIso8601String(),
+        'updatedAt':
+            DateTime.now().toUtc().toIso8601String(), // Use 'updatedAt'
+        'datetime': null, // Clear 'datetime' to avoid schema conflict
       };
+
+      debugPrint('Saving document: ${jsonEncode(documentData)}');
 
       await databases.updateDocument(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbeccb00382aae9f27',
+        collectionId: '67eab72f0030b02f1623',
         documentId: widget.pageId,
         data: documentData,
       );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Content saved successfully!',
+                style: TextStyle(fontFamily: 'JosefinSans')),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Save failed: $e',
-                  style: TextStyle(fontFamily: 'JosefinSans'))),
+            content: Text('Save failed: $e',
+                style: TextStyle(fontFamily: 'JosefinSans')),
+          ),
         );
       }
+      debugPrint('Error saving content: $e');
       rethrow;
     } finally {
       if (mounted) setState(() => isSavingLocation = false);
@@ -266,7 +131,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
     try {
       final doc = await databases.getDocument(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbeccb00382aae9f27',
+        collectionId: '67eab72f0030b02f1623',
         documentId: widget.pageId,
       );
 
@@ -274,48 +139,32 @@ class _A4WhitePageState extends State<A4WhitePage> {
       setState(() {
         backgroundColor = _parseBackgroundColor(data['backgroundColor']);
         selectedLocation = _parseLocation(data);
-        _isAudioPlaying = data['audioId'] != null;
-        audioIds = List<String>.from(data['audioIds'] ?? []);
         textDataList = [];
 
         if (data['textData'] != null) {
           try {
-            if (data['textData'] is String) {
-              final decoded = jsonDecode(data['textData'] as String) as List;
-              textDataList = decoded.map((item) {
-                return TextData(
-                  text: item[0]?.toString() ?? '',
-                  font: item[1]?.toString() ?? 'DeliciousHandrawn',
-                  color: Color(item[2] is int ? item[2] : Colors.black.value),
-                  position: Offset(
-                    (item[3] ?? 50).toDouble(),
-                    (item[4] ?? 50).toDouble(),
-                  ),
-                );
-              }).toList();
-            } else if (data['textData'] is List) {
-              textDataList = (data['textData'] as List).map((item) {
-                if (item is Map) {
-                  return TextData.fromJson(Map<String, dynamic>.from(item));
-                }
-                return TextData(
-                  text: '',
-                  font: 'DeliciousHandrawn',
-                  color: Colors.black,
-                  position: Offset.zero,
-                );
-              }).toList();
-            }
+            final decoded = jsonDecode(data['textData'] as String) as List;
+            textDataList = decoded.map((item) {
+              return TextData(
+                text: item['text'] ?? '',
+                font: item['font'] ?? 'DeliciousHandrawn',
+                color: Color(item['color'] ?? Colors.black.value),
+                position: Offset(
+                  (item['position']['dx'] ?? 50).toDouble(),
+                  (item['position']['dy'] ?? 50).toDouble(),
+                ),
+                size: (item['size'] ?? 28).toDouble(),
+              );
+            }).toList();
           } catch (e) {
             debugPrint('Error parsing text data: $e');
           }
         }
 
-        media =
-            (data['media'] as List? ?? []).map<Map<String, dynamic>>((item) {
+        media = (data['media'] as List<dynamic>? ?? []).map((fileId) {
           return {
             'type': 'image',
-            'fileId': item is String ? item : '',
+            'fileId': fileId,
             'position': const Offset(50, 50),
             'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
             'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
@@ -357,12 +206,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
               // Set media value for web
               media[i]['value'] =
                   "data:$mimeType;base64,${base64Encode(response)}";
-
-              // Initialize video player if this is a video
-              if (item['type'] == 'video') {
-                await _initializeVideoPlayer(
-                    item['fileId'], file.name, response);
-              }
             } else {
               // Load file for mobile
               final url = await storage.getFileDownload(
@@ -370,21 +213,10 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 fileId: item['fileId'],
               );
               media[i]['value'] = url.toString();
-
-              // Initialize video player if this is a video
-              if (item['type'] == 'video') {
-                await _initializeVideoPlayer(item['fileId'], '', Uint8List(0));
-              }
             }
           } catch (e) {
             debugPrint('Error loading file ${item['fileId']}: $e');
             media[i]['hasError'] = true;
-
-            // Remove from video controllers if failed
-            if (item['type'] == 'video') {
-              videoControllers.remove(item['fileId']);
-              chewieControllers.remove(item['fileId']);
-            }
           }
         }
       }
@@ -424,11 +256,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
       final XFile? file;
       if (type == 'image') {
         file = await _picker.pickImage(source: ImageSource.gallery);
-      } else if (type == 'video') {
-        file = await _picker.pickVideo(
-          source: ImageSource.gallery,
-          maxDuration: const Duration(minutes: 10), // Optional duration limit
-        );
       } else {
         return;
       }
@@ -441,7 +268,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
         builder: (context) {
           final controller = TextEditingController();
           return AlertDialog(
-            title: Text('Add ${type == 'image' ? 'Image' : 'Video'} Caption',
+            title: Text('Add Image Caption',
                 style: TextStyle(fontFamily: 'Josefin Sans')),
             content: TextField(
               controller: controller,
@@ -497,17 +324,12 @@ class _A4WhitePageState extends State<A4WhitePage> {
           'textColor': selectedTextColor.value,
         });
       });
-
-      // Initialize video player if video
-      if (type == 'video') {
-        await _initializeVideoPlayer(uploadedFile.$id, fileName, bytes);
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Failed to add ${type == 'image' ? 'image' : 'video'}: ${e.toString()}',
+              'Failed to add image: ${e.toString()}',
               style: TextStyle(fontFamily: 'Josefin Sans'),
             ),
             duration: Duration(seconds: 2),
@@ -518,18 +340,17 @@ class _A4WhitePageState extends State<A4WhitePage> {
     }
   }
 
-// Add this to your a4_white_page.dart
   Future<Map<String, dynamic>> _collectInsightsData() async {
     final doc = await databases.getDocument(
       databaseId: '67c32fc700070ceeadac',
-      collectionId: '67cbeccb00382aae9f27',
+      collectionId: '67eab72f0030b02f1623',
       documentId: widget.pageId,
     );
 
     final data = doc.data;
     final allPages = await databases.listDocuments(
       databaseId: '67c32fc700070ceeadac',
-      collectionId: '67cbeccb00382aae9f27',
+      collectionId: '67eab72f0030b02f1623',
       queries: [
         Query.equal('userId', widget.userId),
       ],
@@ -546,76 +367,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
       'bucketId': bucketId,
       'userId': widget.userId,
     };
-  }
-
-  Future<void> _initializeVideoPlayer(
-      String fileId, String fileName, Uint8List bytes) async {
-    try {
-      VideoPlayerController controller;
-
-      if (kIsWeb) {
-        // For web, use base64 encoded data URL
-        final mimeType = _getMimeType(fileName);
-        controller = VideoPlayerController.network(
-          "data:$mimeType;base64,${base64Encode(bytes)}",
-        );
-      } else {
-        // For mobile, get download URL
-        final url = await storage.getFileDownload(
-          bucketId: bucketId,
-          fileId: fileId,
-        );
-        controller = VideoPlayerController.network(url.toString());
-      }
-
-      // Initialize controller
-      await controller.initialize();
-
-      // Configure Chewie controller
-      final chewieController = ChewieController(
-        videoPlayerController: controller,
-        autoPlay: false,
-        looping: false,
-        allowFullScreen: true,
-        allowMuting: true,
-        showControls: true,
-        materialProgressColors: ChewieProgressColors(
-          playedColor: Colors.blue,
-          handleColor: Colors.blueAccent,
-          backgroundColor: Colors.grey,
-          bufferedColor: Colors.grey.shade300,
-        ),
-        placeholder: Container(
-          color: Colors.grey[200],
-          child: Center(
-            child: CircularProgressIndicator(),
-          ),
-        ),
-        autoInitialize: true,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        videoControllers[fileId] = controller;
-        chewieControllers[fileId] = chewieController;
-      });
-    } catch (e) {
-      debugPrint('Error initializing video player: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Failed to initialize video player',
-              style: TextStyle(fontFamily: 'Josefin Sans'),
-            ),
-          ),
-        );
-      }
-
-      // Clean up if initialization fails
-      videoControllers.remove(fileId)?.dispose();
-    }
   }
 
   void _addText(Offset position) {
@@ -720,26 +471,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
               ),
               Divider(height: 1),
               ListTile(
-                leading: Icon(Icons.videocam, color: Colors.red),
-                title: Text('Add Video',
-                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _addMedia('video');
-                },
-              ),
-              Divider(height: 1),
-              ListTile(
-                leading: Icon(Icons.audiotrack, color: Colors.orange),
-                title: Text('Add Audio',
-                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _addAudio();
-                },
-              ),
-              Divider(height: 1),
-              ListTile(
                 leading: Icon(Icons.format_paint, color: Colors.teal),
                 title: Text('Background Color',
                     style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
@@ -757,6 +488,29 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   void _showTextColorPicker() {
+    final List<Color> colors = [
+      Colors.red, // 1
+      Colors.pink, // 2
+      Colors.purple, // 3
+      Colors.deepPurple, // 4
+      Colors.indigo, // 5
+      Colors.blue, // 6
+      Colors.cyan, // 7
+      Colors.teal, // 8
+      Colors.green, // 9
+      Colors.amber, // 10
+      Colors.orange, // 11
+      Colors.deepOrange, // 12
+      Color(0xFF7D6E99), // 15
+      Color(0xFFC97C5D), // 16
+      Color(0xFF4C9A9A), // 17
+      Color(0xFF7A6F80), // 18
+      Color(0xFFC2A661), // 19
+      Colors.brown, // 13
+      Colors.blueGrey, // 14
+      Colors.black, // 20
+    ];
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -764,6 +518,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: selectedTextColor,
+          availableColors: colors,
           onColorChanged: (color) => setState(() => selectedTextColor = color),
         ),
         actions: [
@@ -778,6 +533,29 @@ class _A4WhitePageState extends State<A4WhitePage> {
   }
 
   void _changeBackgroundColor() {
+    final List<Color> colors = [
+      Colors.white, // 4
+      Color(0xFFE8C8B8), // 1 - Blush Pink Nude
+      Color(0xFF6EE7F2), // 13
+      Color(0xFFFF8FAB), // 14
+      Color(0xFFE6E6FA), // 17 - Lavender Pastel
+      Colors.purple, // 7
+      Colors.indigo, // 9
+      Colors.blue, // 10
+      Colors.lightBlue, // 11
+      Colors.cyan, // 8
+      Colors.teal, // 12
+      Color(0xFFB5EAD7), // 18 - Mint Green
+      Color(0xFFEFCFE3), // 15
+      Color(0xFFF7A399), // 16
+      Color(0xFFFFDAC1), // 19 - Peach Pastel
+      Color(0xFFD4B8A8), // 20 - Warm Beige
+      Color(0xFFB38B6D), // 2 - Light Coffee
+      Colors.brown, // 5
+      Colors.grey, // 6
+      Colors.black, // 3
+    ];
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -785,6 +563,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
             style: TextStyle(fontFamily: 'JosefinSans')),
         content: BlockPicker(
           pickerColor: backgroundColor,
+          availableColors: colors,
           onColorChanged: (color) => setState(() => backgroundColor = color),
         ),
         actions: [
@@ -805,6 +584,7 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
     return Scaffold(
       appBar: AppBar(
+        backgroundColor: Color(0xFFE5D5C3),
         title: Row(
           children: [
             Text(widget.pageName,
@@ -902,7 +682,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
                       height: contentHeight,
                     ),
                     ..._buildDraggableElements(isMobile),
-                    ..._buildAudioPlayers(),
                   ],
                 ),
               ),
@@ -950,8 +729,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
           child: DraggableImage(
             key: ValueKey('image_${mediaItem['fileId']}_$i'),
             mediaItem: mediaItem,
-            videoControllers: videoControllers,
-            chewieControllers: chewieControllers,
             onPositionChanged: (updatedItem) =>
                 setState(() => media[i] = updatedItem),
             onDelete: () => setState(() => media.removeAt(i)),
@@ -1156,8 +933,6 @@ class DraggableImage extends StatefulWidget {
   final Function() onDelete;
   final bool isMobile;
   final double maxHeight;
-  final Map<String, VideoPlayerController> videoControllers;
-  final Map<String, ChewieController> chewieControllers;
 
   const DraggableImage({
     super.key,
@@ -1166,8 +941,6 @@ class DraggableImage extends StatefulWidget {
     required this.onDelete,
     required this.isMobile,
     required this.maxHeight,
-    required this.videoControllers,
-    required this.chewieControllers,
   });
 
   @override
@@ -1192,8 +965,7 @@ class _DraggableImageState extends State<DraggableImage> {
     if (mediaUrl.isEmpty) {
       _hasError = true;
       _isLoading = false;
-    } else if (widget.mediaItem['type'] != 'video' &&
-        !mediaUrl.startsWith('http') &&
+    } else if (!mediaUrl.startsWith('http') &&
         !mediaUrl.startsWith('data:image')) {
       _hasError = true;
       _isLoading = false;
@@ -1254,57 +1026,6 @@ class _DraggableImageState extends State<DraggableImage> {
     }
 
     final mediaUrl = widget.mediaItem['value'] ?? '';
-    final isVideo = widget.mediaItem['type'] == 'video';
-
-    if (isVideo) {
-      final fileId = widget.mediaItem['fileId'];
-      final chewieController = widget.chewieControllers[fileId];
-
-      if (chewieController == null) {
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 8),
-              Text('Loading video...',
-                  style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 12)),
-            ],
-          ),
-        );
-      }
-
-      return Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: Colors.black,
-          border: Border.all(color: Colors.grey.shade300),
-        ),
-        child: Stack(
-          children: [
-            Chewie(controller: chewieController),
-            if (_isHovering)
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Container(
-                  color: Colors.black.withOpacity(0.3),
-                  child: Center(
-                    child: Icon(
-                      Icons.play_circle_fill,
-                      color: Colors.white,
-                      size: 50,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      );
-    }
 
     if (mediaUrl.startsWith('data:image')) {
       try {
@@ -1405,20 +1126,22 @@ class _DraggableImageState extends State<DraggableImage> {
   }
 
   void _handleScaleEnd(ScaleEndDetails _) {
-    widget.onPositionChanged({
-      ...widget.mediaItem,
-      'position': Offset(
-        (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
-        (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
-      ),
-      'width':
-          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
-              _scale,
-      'height':
-          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
-              _scale,
+    setState(() {
+      widget.onPositionChanged({
+        ...widget.mediaItem,
+        'position': Offset(
+          (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
+          (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
+        ),
+        'width':
+            (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+                _scale,
+        'height':
+            (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+                _scale,
+      });
+      _panOffset = Offset.zero; // Reset pan offset after updating position
     });
-    _panOffset = Offset.zero;
   }
 
   void _updateMediaItem() {

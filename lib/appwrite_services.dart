@@ -11,10 +11,10 @@ class AppwriteService {
 
   static const String PROJECT_ID = "67c329590010d80b983c";
   static const String DATABASE_ID = "67c32fc700070ceeadac";
-  static const String USERS_COLLECTION_ID = "67cbe1ce00196895cd13";
-  static const String FOLDERS_COLLECTION_ID = "67cbebb60023c51812a1";
-  static const String PAGES_COLLECTION_ID = "67cbeccb00382aae9f27";
-  static const String MEDIA_COLLECTION_ID = "67cd34960000649f059d";
+  static const String USERS_COLLECTION_ID = "67eab73a002efac8d01e";
+  static const String FOLDERS_COLLECTION_ID = "67eab63d001054f7631a";
+  static const String PAGES_COLLECTION_ID = "67eab72f0030b02f1623";
+  static const String MEDIA_COLLECTION_ID = "67eab71d002842f84e01";
   static const String DRAWINGS_COLLECTION_ID = "67cd351c000d48c4f69f";
   static const String STORAGE_BUCKET_ID = "67cd36510039f3d96c62";
 

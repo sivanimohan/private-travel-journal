@@ -8,7 +8,8 @@ class AddPagePage extends StatelessWidget {
   final String userId;
   final Databases database;
 
-  static const String COLLECTION_ID = '67cbeccb00382aae9f27'; // Pages Collection ID
+  static const String COLLECTION_ID =
+      '67eab72f0030b02f1623'; // Pages Collection ID
   static const String DATABASE_ID = '67c32fc700070ceeadac'; // Database ID
 
   AddPagePage({
@@ -48,7 +49,8 @@ class AddPagePage extends StatelessWidget {
           'backgroundColor': 0xFFFFFFFF,
           'location': '0.0.0.0',
           'mediaIds': [],
-          'createdAt': DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),
+          'createdAt':
+              DateFormat("yyyy-MM-dd'T'HH:mm:ss").format(DateTime.now()),
         },
       );
 
@@ -73,12 +75,10 @@ class AddPagePage extends StatelessWidget {
         title: const Text(
           'Add Page',
           style: TextStyle(
-
             fontSize: 24,
             fontWeight: FontWeight.w600,
             color: Colors.white,
             fontFamily: 'JosefinSans',
-
           ),
         ),
         backgroundColor: const Color(0xFF2C7DA0),
@@ -105,7 +105,8 @@ class AddPagePage extends StatelessWidget {
               onPressed: () => _savePage(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF2C7DA0),
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -113,11 +114,9 @@ class AddPagePage extends StatelessWidget {
               child: const Text(
                 'Add Page',
                 style: TextStyle(
-
                   fontSize: 18,
                   color: Colors.white,
                   fontFamily: 'JosefinSans',
-
                 ),
               ),
             ),

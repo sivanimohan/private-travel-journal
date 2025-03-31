@@ -529,7 +529,7 @@ class _WorldMapPageState extends State<WorldMapPage>
     try {
       final response = await widget.databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbeccb00382aae9f27',
+        collectionId: '67eab72f0030b02f1623',
         queries: [
           Query.equal('userId', widget.userId),
           Query.isNotNull('location'),
@@ -588,7 +588,7 @@ class _WorldMapPageState extends State<WorldMapPage>
     try {
       final response = await widget.databases.listDocuments(
         databaseId: '67c32fc700070ceeadac',
-        collectionId: '67cbeccb00382aae9f27',
+        collectionId: '67eab72f0030b02f1623',
         queries: [Query.equal('userId', widget.userId)],
       );
 

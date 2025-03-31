@@ -8,6 +8,10 @@ import base64
 from io import BytesIO
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from datetime import datetime, timedelta
+from collections import defaultdict
+import numpy as np
+from sklearn.cluster import DBSCAN
 import numpy as np
 from sklearn.cluster import KMeans
 import math
@@ -346,6 +350,105 @@ def process_mood_timeline(data: Dict) -> Dict:
         'avg_mood': sum(entry['mood'] for entry in smoothed_timeline)/len(smoothed_timeline) if smoothed_timeline else 0.5
     }
 
+
+# Replace the KeyBERT-based functions with TextBlob/WordCloud alternatives
+
+def generate_place_summary(entries: List[Dict]) -> Dict:
+    """Generate 'Why You Loved This Place' summary using TextBlob"""
+    place_entries = [e for e in entries if "location" in e]
+    if not place_entries:
+        return {"error": "No location-tagged entries found"}
+    
+    # Group by location
+    location_groups = defaultdict(list)
+    for entry in place_entries:
+        location_groups[entry["location"]].append(entry["text"])
+    
+    # Generate summaries and key phrases
+    summaries = {}
+    for location, texts in location_groups.items():
+        combined_text = " ".join(texts)
+        
+        # Generate summary
+        summary = summarizer(
+            combined_text,
+            max_length=100,
+            min_length=30,
+            do_sample=False
+        )[0]["summary_text"]
+        
+        # Extract key phrases using TextBlob noun phrases
+        blob = TextBlob(combined_text)
+        noun_phrases = list(set(blob.noun_phrases))  # Get unique noun phrases
+        noun_phrases = [np for np in noun_phrases if len(np.split()) > 1]  # Filter single words
+        
+        # Get top 3 most frequent noun phrases
+        word_counts = Counter(noun_phrases)
+        top_phrases = [phrase for phrase, count in word_counts.most_common(3)]
+        
+        summaries[location] = {
+            "summary": summary,
+            "key_reasons": top_phrases
+        }
+    
+    return summaries
+
+def detect_throwback_moments(entries: List[Dict], current_date: str = None) -> Dict:
+    """Find forgotten memories using TextBlob sentiment analysis"""
+    if not current_date:
+        current_date = datetime.now().isoformat()
+    
+    # Filter entries from 6+ months ago
+    threshold_date = datetime.fromisoformat(current_date) - timedelta(days=180)
+    old_entries = [
+        e for e in entries 
+        if datetime.fromisoformat(e["createdAt"]) < threshold_date
+    ]
+    
+    if not old_entries:
+        return {"error": "No entries older than 6 months found"}
+    
+    # Cluster by time proximity (30-day windows)
+    timestamps = [
+        datetime.fromisoformat(e["createdAt"]).timestamp() 
+        for e in old_entries
+    ]
+    clustering = DBSCAN(eps=30*86400, min_samples=1).fit(np.array(timestamps).reshape(-1, 1))
+    
+    # Extract key memories per cluster
+    throwbacks = []
+    for cluster_id in set(clustering.labels_):
+        cluster_entries = [
+            e for i, e in enumerate(old_entries) 
+            if clustering.labels_[i] == cluster_id
+        ]
+        
+        # Find the most positive entry in the cluster
+        representative = max(
+            cluster_entries,
+            key=lambda e: TextBlob(e["text"]).sentiment.polarity
+        )
+        
+        # Get location and first positive sentence
+        location = representative.get("location", "unknown place")
+        blob = TextBlob(representative["text"])
+        positive_sentences = [
+            str(sent) for sent in blob.sentences 
+            if sent.sentiment.polarity > 0.3
+        ]
+        
+        memory_snippet = positive_sentences[0] if positive_sentences else representative["text"][:100] + "..."
+        
+        throwbacks.append({
+            "date": representative["createdAt"],
+            "location": location,
+            "memory": memory_snippet,
+            "sentiment_score": blob.sentiment.polarity
+        })
+    
+    # Sort by sentiment score (most positive first)
+    throwbacks.sort(key=lambda x: -x["sentiment_score"])
+    return {"throwbacks": throwbacks[:5]}  # Return top 5 most positive
 def process_bucket_list(data: Dict) -> Dict:
     """Generate personalized bucket list suggestions"""
     activities = set()

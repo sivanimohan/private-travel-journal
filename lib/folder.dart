@@ -25,7 +25,7 @@ class _FolderPageState extends State<FolderPage> {
   late Databases _database;
   List<Map<String, String>> pages = [];
   final String databaseId = '67c32fc700070ceeadac';
-  final String collectionId = '67cbeccb00382aae9f27';
+  final String collectionId = '67eab72f0030b02f1623';
 
   @override
   void initState() {
