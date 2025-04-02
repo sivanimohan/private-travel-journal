@@ -2,12 +2,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-// Add this import at the top of your file:
 import 'package:http/http.dart' as http;
 import 'package:appwrite/appwrite.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 import 'dart:convert';
 import 'package:shimmer/shimmer.dart';
+import 'package:confetti/confetti.dart';
 
 class WorldMapPage extends StatefulWidget {
   final Databases databases;
@@ -35,9 +35,9 @@ class _WorldMapPageState extends State<WorldMapPage>
   bool _showConnectionLines = true;
   bool _showLocationMarkers = true;
 
-  // Animation controllers
   late AnimationController _pathAnimationController;
   double _pathAnimationProgress = 0.0;
+  late ConfettiController _confettiController;
 
   @override
   void initState() {
@@ -51,12 +51,15 @@ class _WorldMapPageState extends State<WorldMapPage>
         });
       });
 
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 3));
     _fetchData();
   }
 
   @override
   void dispose() {
     _pathAnimationController.dispose();
+    _confettiController.dispose();
     super.dispose();
   }
 
@@ -65,6 +68,7 @@ class _WorldMapPageState extends State<WorldMapPage>
       _pathAnimationController.stop();
     } else {
       _pathAnimationController.repeat(reverse: true);
+      _confettiController.play();
     }
   }
 
@@ -99,6 +103,8 @@ class _WorldMapPageState extends State<WorldMapPage>
             'name': address,
             'coordinates': LatLng(lat, lon),
             'display_name': data[0]['display_name'].toString(),
+            'date': 'Unknown date',
+            'duration': 'Unknown duration',
           };
         }
       }
@@ -167,39 +173,41 @@ class _WorldMapPageState extends State<WorldMapPage>
   }
 
   int _calculateDaysTraveled() {
-    if (locations.isEmpty) return 0;
-
-    // This is a simplified calculation - you might want to use actual date differences
-    return locations.length * 2; // Assuming average 2 days per location
+    return locations.length * 2; // Simplified assumption
   }
 
   String _getMostVisitedRegion() {
     if (locations.isEmpty) return 'None';
-
-    // Simplified region detection - in a real app you'd use geocoding to get regions
     final regionCounts = <String, int>{};
     for (final loc in locations) {
       final name = loc['name'].toString();
       final region = name.contains(',') ? name.split(',').last.trim() : name;
       regionCounts[region] = (regionCounts[region] ?? 0) + 1;
     }
-
     return regionCounts.entries.reduce((a, b) => a.value > b.value ? a : b).key;
   }
 
   Widget _buildStatCard(String title, String value, IconData icon) {
     return Card(
-      elevation: 2,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
-            Icon(icon, size: 30, color: Colors.blue),
+            Icon(icon, size: 30, color: Colors.blueAccent),
             const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontSize: 12)),
+            Text(title,
+                style: const TextStyle(
+                    fontFamily: 'JosefinSans',
+                    fontSize: 12,
+                    color: Colors.grey)),
             Text(value,
-                style:
-                    const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                style: const TextStyle(
+                    fontFamily: 'JosefinSans',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blueAccent)),
           ],
         ),
       ),
@@ -211,8 +219,8 @@ class _WorldMapPageState extends State<WorldMapPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Your Travel Map',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w500)),
-        backgroundColor: Colors.blue[800],
+            style: TextStyle(fontFamily: 'JosefinSans', fontSize: 24)),
+        backgroundColor: Colors.blueAccent,
         actions: [
           IconButton(
             icon: Icon(_showFullPath ? Icons.pause : Icons.timeline),
@@ -241,21 +249,46 @@ class _WorldMapPageState extends State<WorldMapPage>
                 setState(() => _showLocationMarkers = !_showLocationMarkers),
             tooltip: 'Toggle location markers',
           ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchData,
+            tooltip: 'Refresh data',
+          ),
         ],
       ),
       body: Stack(
         children: [
-          isLoading
-              ? Center(
-                  child: Shimmer.fromColors(
-                    baseColor: Colors.grey[300]!,
-                    highlightColor: Colors.grey[100]!,
-                    child:
-                        Container(width: 100, height: 100, color: Colors.grey),
-                  ),
-                )
-              : _buildMapView(),
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.blue[50]!, Colors.white],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+            ),
+            child: isLoading ? _buildLoadingScreen() : _buildMapView(),
+          ),
+          ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [
+              Colors.green,
+              Colors.blue,
+              Colors.pink,
+              Colors.orange,
+              Colors.purple
+            ],
+          ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _togglePathAnimation,
+        child: Icon(_pathAnimationController.isAnimating
+            ? Icons.pause
+            : Icons.play_arrow),
+        backgroundColor: Colors.blueAccent,
+        tooltip: 'Animate path',
       ),
     );
   }
@@ -266,16 +299,22 @@ class _WorldMapPageState extends State<WorldMapPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.location_off, size: 64, color: Colors.grey),
+            const Icon(Icons.error_outline, size: 50, color: Colors.red),
             const SizedBox(height: 16),
             Text(
               errorMessage.isNotEmpty ? errorMessage : 'No locations available',
-              style: const TextStyle(fontSize: 18),
+              style: const TextStyle(
+                  fontFamily: 'JosefinSans', fontSize: 18, color: Colors.grey),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _fetchData,
-              child: const Text('Retry'),
+              style: ElevatedButton.styleFrom(
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20))),
+              child: const Text('Try Again',
+                  style: TextStyle(fontFamily: 'JosefinSans')),
             ),
           ],
         ),
@@ -304,12 +343,11 @@ class _WorldMapPageState extends State<WorldMapPage>
                     points: locations
                         .map((loc) => loc['coordinates'] as LatLng)
                         .toList(),
-                    color: Colors.blue.withOpacity(0.7),
-                    strokeWidth: 3,
-                    borderColor: Colors.white.withOpacity(0.5),
-                    borderStrokeWidth: 1,
+                    color: Colors.blueAccent.withOpacity(0.5),
+                    strokeWidth: 4,
+                    borderColor: Colors.pinkAccent.withOpacity(0.7),
+                    borderStrokeWidth: 2,
                   ),
-                  // Animated path
                   if (_pathAnimationController.isAnimating)
                     Polyline(
                       points: locations
@@ -321,8 +359,13 @@ class _WorldMapPageState extends State<WorldMapPage>
                                       .round()))
                           .map((loc) => loc['coordinates'] as LatLng)
                           .toList(),
-                      color: Colors.red.withOpacity(0.8),
-                      strokeWidth: 4,
+                      color: Colors.purple.withOpacity(0.8),
+                      strokeWidth: 5,
+                      gradientColors: [
+                        Colors.purple,
+                        Colors.pink,
+                        Colors.orange
+                      ],
                     ),
                 ],
               ),
@@ -333,52 +376,70 @@ class _WorldMapPageState extends State<WorldMapPage>
                   final location = entry.value;
                   return Marker(
                     point: location['coordinates'],
-                    width: 40,
-                    height: 40,
+                    width: 50,
+                    height: 50,
                     child: GestureDetector(
                       onTap: () => showDialog(
                         context: context,
                         builder: (context) => AlertDialog(
-                          title: Text(location['name']?.toString() ??
-                              'Unknown location'),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20)),
+                          title: Text(location['name']?.toString() ?? 'Unknown',
+                              style: const TextStyle(
+                                  fontFamily: 'JosefinSans',
+                                  color: Colors.blueAccent)),
                           content: Column(
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(location['display_name']?.toString() ?? ''),
+                              Text(location['display_name']?.toString() ?? '',
+                                  style: const TextStyle(
+                                      fontFamily: 'JosefinSans')),
                               const SizedBox(height: 8),
-                              Text('Visited on: ${location['date']}'),
-                              Text('Duration: ${location['duration']}'),
+                              Text('Visited on: ${location['date']}',
+                                  style: const TextStyle(
+                                      fontFamily: 'JosefinSans')),
+                              Text('Duration: ${location['duration']}',
+                                  style: const TextStyle(
+                                      fontFamily: 'JosefinSans')),
                             ],
                           ),
                           actions: [
                             TextButton(
                               onPressed: () => Navigator.pop(context),
-                              child: const Text('Close'),
+                              child: const Text('Close',
+                                  style: TextStyle(fontFamily: 'JosefinSans')),
                             ),
                             TextButton(
                               onPressed: () {
                                 Navigator.pop(context);
                                 _openInMaps(location['coordinates']);
                               },
-                              child: const Text('Open in Maps'),
+                              child: const Text('Open in Maps',
+                                  style: TextStyle(fontFamily: 'JosefinSans')),
                             ),
                           ],
                         ),
                       ),
-                      child: Container(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 500),
                         decoration: BoxDecoration(
-                          color: Colors.blue,
                           shape: BoxShape.circle,
+                          color: Colors.blueAccent.withOpacity(0.8),
                           border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.blue.withOpacity(0.5),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
                         ),
                         child: Center(
-                          child: Text(
-                            '${idx + 1}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: Icon(
+                            Icons.favorite,
+                            color: Colors.pinkAccent,
+                            size: 30,
                           ),
                         ),
                       ),
@@ -388,8 +449,6 @@ class _WorldMapPageState extends State<WorldMapPage>
               ),
           ],
         ),
-
-        // Stats panel
         Positioned(
           top: 16,
           left: 16,
@@ -397,7 +456,7 @@ class _WorldMapPageState extends State<WorldMapPage>
             onTap: () => setState(() => _showTravelStats = !_showTravelStats),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.9),
                 borderRadius: BorderRadius.circular(20),
@@ -416,23 +475,27 @@ class _WorldMapPageState extends State<WorldMapPage>
                     _showTravelStats
                         ? Icons.arrow_drop_up
                         : Icons.arrow_drop_down,
-                    color: Colors.blue,
+                    color: Colors.blueAccent,
                   ),
                   const Text('Travel Stats',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextStyle(
+                          fontFamily: 'JosefinSans',
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blueAccent)),
                 ],
               ),
             ),
           ),
         ),
-
         if (_showTravelStats)
           Positioned(
             top: 60,
             left: 16,
             right: 16,
             child: Card(
-              elevation: 4,
+              elevation: 8,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20)),
               child: Padding(
                 padding: const EdgeInsets.all(12),
                 child: Wrap(
@@ -464,8 +527,6 @@ class _WorldMapPageState extends State<WorldMapPage>
               ),
             ),
           ),
-
-        // Map controls
         Positioned(
           bottom: 16,
           right: 16,
@@ -476,6 +537,7 @@ class _WorldMapPageState extends State<WorldMapPage>
                   _currentMapCenter = locations.first['coordinates'];
                   _currentZoom = 3.0;
                 }),
+                backgroundColor: Colors.blueAccent,
                 child: const Icon(Icons.explore),
                 tooltip: 'Reset view',
               ),
@@ -484,6 +546,7 @@ class _WorldMapPageState extends State<WorldMapPage>
                 onPressed: () =>
                     setState(() => _currentZoom = _currentZoom + 1),
                 mini: true,
+                backgroundColor: Colors.blueAccent,
                 child: const Icon(Icons.add),
                 tooltip: 'Zoom in',
               ),
@@ -492,22 +555,37 @@ class _WorldMapPageState extends State<WorldMapPage>
                 onPressed: () =>
                     setState(() => _currentZoom = _currentZoom - 1),
                 mini: true,
+                backgroundColor: Colors.blueAccent,
                 child: const Icon(Icons.remove),
                 tooltip: 'Zoom out',
-              ),
-              const SizedBox(height: 8),
-              FloatingActionButton(
-                onPressed: _togglePathAnimation,
-                mini: true,
-                child: Icon(_pathAnimationController.isAnimating
-                    ? Icons.pause
-                    : Icons.play_arrow),
-                tooltip: 'Animate path',
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLoadingScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Shimmer.fromColors(
+            baseColor: Colors.blue[300]!,
+            highlightColor: Colors.blue[100]!,
+            child: Container(
+                width: 100,
+                height: 100,
+                decoration: const BoxDecoration(
+                    shape: BoxShape.circle, color: Colors.blue)),
+          ),
+          const SizedBox(height: 20),
+          Text('Loading your travel map...',
+              style: TextStyle(
+                  fontFamily: 'JosefinSans', fontSize: 18, color: Colors.blue)),
+        ],
+      ),
     );
   }
 
