@@ -99,73 +99,6 @@ class _SignUpPageState extends State<SignUpPage> {
     }
   }
 
-  /// 🔹 Google Sign-In Function
-  Future<void> _signInWithGoogle() async {
-    try {
-      await account.createOAuth2Session(
-        provider: OAuthProvider.google,
-        success: 'appwrite://auth',
-        failure: 'appwrite://auth-failed',
-      );
-
-      // Get user details after login
-      models.User user = await account.get();
-
-      try {
-        // Check if user already exists in database
-        await database.getDocument(
-          databaseId: '67c32fc700070ceeadac',
-          collectionId: '67eab73a002efac8d01e',
-          documentId: user.$id,
-        );
-      } catch (_) {
-        // Create user document if not found
-        await database.createDocument(
-          databaseId: '67c32fc700070ceeadac',
-          collectionId: '67eab73a002efac8d01e',
-          documentId: user.$id,
-          data: {
-            'userId': user.$id,
-            'email': user.email,
-            'name': user.name,
-          },
-        );
-      }
-
-      // Save user details in SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('userId', user.$id);
-      await prefs.setString('fullName', user.name);
-      await prefs.setString('email', user.email);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("✅ Logged in as ${user.name}"),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Navigate to HomePage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomePage(
-            client: widget.client,
-            userId: user.$id,
-            fullName: user.name,
-          ),
-        ),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("❌ Google Sign-In Failed: ${e.toString()}"),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -192,7 +125,7 @@ class _SignUpPageState extends State<SignUpPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    /// Title (Unchanged Font)
+                    /// Title
                     Text(
                       "Sign Up",
                       style: GoogleFonts.alegreya(
@@ -243,17 +176,6 @@ class _SignUpPageState extends State<SignUpPage> {
                           "Sign Up",
                           style: GoogleFonts.josefinSans(),
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    /// Google Sign-In Button
-                    ElevatedButton.icon(
-                      onPressed: _signInWithGoogle,
-                      icon: Image.asset('assets/google.png', width: 20),
-                      label: Text(
-                        "Sign in with Google",
-                        style: GoogleFonts.josefinSans(),
                       ),
                     ),
                   ],

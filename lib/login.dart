@@ -29,54 +29,6 @@ class _LoginPageState extends State<LoginPage> {
     account = Account(widget.client);
   }
 
-  /// 🔹 Google Sign-In Function
-  Future<void> _googleSignIn() async {
-    try {
-      await account.createOAuth2Session(
-        provider: OAuthProvider.google,
-        success: 'appwrite://auth',
-        failure: 'appwrite://auth-failed',
-      );
-
-      // Retrieve user details after login
-      final models.User user = await account.get();
-      String userId = user.$id;
-      String fullName = user.name;
-      String email = user.email;
-
-      print("✅ Logged in as: $fullName ($email)");
-
-      // 🔹 Save user details to SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('userId', userId);
-      await prefs.setString('fullName', fullName);
-      await prefs.setString('email', email);
-
-      // 🔹 Navigate to HomePage
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => HomePage(
-            client: widget.client,
-            userId: userId,
-            fullName: fullName,
-          ),
-        ),
-      );
-    } catch (e) {
-      print("❌ Google sign-in failed: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            "Google sign-in failed: ${e.toString()}",
-            style: GoogleFonts.josefinSans(),
-          ),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
   /// 🔹 Email & Password Sign-In Function
   Future<void> _emailSignIn() async {
     try {
@@ -213,37 +165,6 @@ class _LoginPageState extends State<LoginPage> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(15),
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    /// 🔹 Google Sign-In Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _googleSignIn,
-                        icon: Image.asset(
-                          'assets/google.png',
-                          width: 20,
-                          height: 20,
-                          errorBuilder: (context, error, stackTrace) =>
-                              const Icon(Icons.error),
-                        ),
-                        label: Text(
-                          "Sign in with Google",
-                          style: GoogleFonts.josefinSans(),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(15),
-                            side: BorderSide(color: Colors.grey.shade300),
-                          ),
-                          elevation: 5,
                         ),
                       ),
                     ),

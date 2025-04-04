@@ -1,583 +1,161 @@
-import json
-from collections import Counter
-from datetime import datetime
+from collections import Counter, defaultdict
 from textblob import TextBlob
-from wordcloud import WordCloud
-import matplotlib.pyplot as plt
-import base64
-from io import BytesIO
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import datetime, timedelta
-from collections import defaultdict
-import numpy as np
-from sklearn.cluster import DBSCAN
-import numpy as np
-from sklearn.cluster import KMeans
-import math
-from geopy.geocoders import Nominatim
-import time
-from typing import Dict, List, Tuple, Optional, Any
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  # This enables CORS for all routes
 
-# Initialize geocoder with custom user agent
-geolocator = Nominatim(user_agent="travel_insights_app/1.0")
-
-def haversine(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance between two points on Earth in km"""
-    R = 6371  # Earth radius in km
-    dLat = math.radians(lat2 - lat1)
-    dLon = math.radians(lon2 - lon1)
-    a = (math.sin(dLat/2) * math.sin(dLat/2) +
-        math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-        math.sin(dLon/2) * math.sin(dLon/2))
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
-
-def geocode_location(location_name: str) -> Optional[Tuple[float, float]]:
-    """Convert location name to coordinates with rate limiting"""
-    try:
-        time.sleep(1)  # Respect rate limits
-        location = geolocator.geocode(location_name)
-        if location:
-            return (location.latitude, location.longitude)
-        return None
-    except Exception as e:
-        print(f"Geocoding error for {location_name}: {str(e)}")
-        return None
-
-
-def process_sentiment(data: Dict) -> Dict:
-    """Calculate sentiment analysis over time"""
-    sentiment_data = []
-    for page in data['allPages']:
-        if 'textData' in page and page['textData'] and 'updatedAt' in page:
-            try:
-                text_data = json.loads(page['textData']) if isinstance(page['textData'], str) else page['textData']
-                if isinstance(text_data, list):
-                    text = " ".join([str(item[0]) for item in text_data if isinstance(item, list) and len(item) > 0])
-                    analysis = TextBlob(text)
-                    sentiment_data.append({
-                        'date': page['updatedAt'],
-                        'score': analysis.sentiment.polarity,
-                        'subjectivity': analysis.sentiment.subjectivity
-                    })
-            except Exception as e:
-                print(f"Error processing sentiment: {e}")
-                continue
-    
-    avg_score = sum(d['score'] for d in sentiment_data) / len(sentiment_data) if sentiment_data else 0
-    return {
-        'timeline': sentiment_data,
-        'average_score': avg_score
-    }
-def process_location_sentiment(data: Dict) -> Dict:
-    """Calculate average sentiment by location"""
-    location_sentiments = {}
-    
-    for page in data['allPages']:
-        if 'location' in page and page['location'] and 'textData' in page and page['textData']:
-            try:
-                location = page['location']
-                text = str(page['textData'])
-                sentiment = TextBlob(text).sentiment.polarity
-                
-                if location not in location_sentiments:
-                    location_sentiments[location] = []
-                location_sentiments[location].append(sentiment)
-            except Exception as e:
-                print(f"Error processing location sentiment: {e}")
-                continue
-    
-    # Calculate averages and get top/bottom locations
-    avg_sentiments = {
-        loc: sum(sents)/len(sents) 
-        for loc, sents in location_sentiments.items() 
-        if len(sents) > 0
-    }
-    
-    top_locations = sorted(
-        avg_sentiments.items(), 
-        key=lambda x: x[1], 
-        reverse=True
-    )[:3]
-    
-    bottom_locations = sorted(
-        avg_sentiments.items(), 
-        key=lambda x: x[1]
-    )[:3]
-    
-    return {
-        'average_by_location': avg_sentiments,
-        'top_locations': top_locations,
-        'bottom_locations': bottom_locations,
-        'overall_average': sum(avg_sentiments.values())/len(avg_sentiments) if avg_sentiments else 0
-    }
-def process_highlights(data: Dict) -> List[str]:
-    """Extract notable highlights from journal entries"""
-    highlights = []
-    for page in data['allPages']:
-        if 'textData' in page and page['textData']:
-            try:
-                text_data = json.loads(page['textData']) if isinstance(page['textData'], str) else page['textData']
-                if isinstance(text_data, list):
-                    for item in text_data:
-                        if isinstance(item, list) and len(item) > 0:
-                            text = str(item[0])
-                            if len(text.split()) > 5 and TextBlob(text).sentiment.polarity > 0.2:
-                                highlights.append(text)
-            except Exception as e:
-                print(f"Error processing highlights: {e}")
-                continue
-    
-    return highlights[:10]
-
-def process_location_repeats(data: Dict) -> Dict:
-    """Calculate most visited locations"""
-    locations = []
-    for page in data['allPages']:
-        if 'location' in page and page['location']:
-            locations.append(page['location'])
-    
-    location_counts = Counter(locations)
-    return {
-        'most_visited': location_counts.most_common(5),
-        'total_unique': len(location_counts)
-    }
-
-def process_seasonal_patterns(data: Dict) -> Dict:
-    """Analyze travel patterns by season"""
-    seasonal_data = {'Winter': 0, 'Spring': 0, 'Summer': 0, 'Fall': 0}
-    for page in data['allPages']:
-        if 'updatedAt' in page and page['updatedAt']:
-            try:
-                date_str = page['updatedAt']
-                if '+' in date_str:
-                    date_str = date_str.split('+')[0]
-                date = datetime.strptime(date_str, '%Y-%m-%dT%H:%M:%S.%f')
-                month = date.month
-                if 3 <= month <= 5:
-                    seasonal_data['Spring'] += 1
-                elif 6 <= month <= 8:
-                    seasonal_data['Summer'] += 1
-                elif 9 <= month <= 11:
-                    seasonal_data['Fall'] += 1
-                else:
-                    seasonal_data['Winter'] += 1
-            except Exception as e:
-                print(f"Error processing seasonal data: {e}")
-                continue
-    
-    return {
-        'by_season': seasonal_data,
-        'most_common_season': max(seasonal_data.items(), key=lambda x: x[1])[0] if seasonal_data else 'None'
-    }
-
-def process_photo_timeline(data: Dict) -> List[Dict]:
-    """Create timeline of travel photos"""
-    photos = []
-    for page in data['allPages']:
-        if 'media' in page and page['media']:
-            for media in page['media']:
-                if isinstance(media, dict) and media.get('type') == 'image':
-                    photos.append({
-                        'url': media.get('value', ''),
-                        'date': page.get('updatedAt', ''),
-                        'location': page.get('location', '')
-                    })
-    
-    photos.sort(key=lambda x: x['date'], reverse=True)
-    return photos[:20]
-
-def process_travel_personality(data: Dict) -> Dict:
-    """Analyze travel personality based on patterns"""
-    activity_counts = Counter()
-    location_types = []
-    durations = []
-    sentiment_scores = []
-    
-    for page in data['allPages']:
-        if 'tags' in page and page['tags']:
-            activity_counts.update(page['tags'])
-        if 'location' in page and page['location']:
-            location_types.append(page['location'].split(',')[-1].strip())
-        if 'startDate' in page and 'endDate' in page and page['startDate'] and page['endDate']:
-            try:
-                start = datetime.strptime(page['startDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
-                end = datetime.strptime(page['endDate'], '%Y-%m-%dT%H:%M:%S.%fZ')
-                durations.append((end - start).days)
-            except:
-                continue
-        if 'textData' in page and page['textData']:
-            try:
-                text = str(page['textData'])
-                sentiment_scores.append(TextBlob(text).sentiment.polarity)
-            except:
-                continue
-    
-    avg_duration = sum(durations)/len(durations) if durations else 0
-    location_diversity = len(set(location_types))
-    avg_sentiment = sum(sentiment_scores)/len(sentiment_scores) if sentiment_scores else 0
-    
-    personality = "The Explorer"
-    traits = []
-    
-    if avg_duration > 14:
-        personality = "The Immerser"
-        traits.append("Deep cultural experiences")
-    elif avg_duration < 3:
-        personality = "The Quick Adventurer"
-        traits.append("Fast-paced travel")
-    
-    if location_diversity > 10:
-        personality += " with Wanderlust"
-        traits.append("Loves variety")
-    
-    if 'hiking' in activity_counts or 'adventure' in activity_counts:
-        traits.append("Adventurous")
-    
-    if avg_sentiment > 0.3:
-        traits.append("Positive traveler")
-    elif avg_sentiment < -0.1:
-        traits.append("Thoughtful traveler")
-    
-    return {
-        'travel_personality': personality,
-        'personality_traits': traits,
-        'avg_trip_duration': avg_duration,
-        'location_diversity': location_diversity,
-        'avg_sentiment': avg_sentiment
-    }
-
-def process_geographic_facts(data: Dict) -> Dict:
-    """Generate fun geographic facts"""
-    locations = []
-    coordinates = []
-    climate_zones = set()
-    total_distance = 0
-    
-    # First pass to collect locations
-    for page in data['allPages']:
-        if 'location' in page and page['location']:
-            locations.append(page['location'])
-    
-    # Geocode locations (with simulated results for example)
-    if len(locations) > 1:
-        # Simulate distance calculation between locations
-        for i in range(len(locations)-1):
-            total_distance += np.random.randint(100, 5000)
-        
-        # Simulate climate zones
-        climate_zones.update(['Temperate', 'Mediterranean', 'Tropical'])
-    
-    return {
-        'geographic_facts': [
-            f"You've traveled across {len(climate_zones)} climate zones",
-            f"Your average trip distance is {total_distance//len(locations) if locations else 0} km",
-            "You prefer coastal destinations" if "beach" in str(locations).lower() else "You prefer urban destinations",
-            f"You've visited {len(set(locations))} unique locations"
-        ],
-        'total_distance': total_distance,
-        'climate_zones': list(climate_zones)
-    }
-
-def process_activity_patterns(data: Dict) -> Dict:
-    """Analyze activity patterns using clustering"""
-    activities = Counter()
-    for page in data['allPages']:
-        if 'tags' in page and page['tags']:
-            activities.update(page['tags'])
-    
-    # Cluster similar activities (simplified example)
-    activity_list = list(activities.keys())
-    if len(activity_list) > 3:
-        # Simulate clustering
-        clustered = {
-            'Outdoor': ['hiking', 'camping', 'swimming'],
-            'Cultural': ['museum', 'art', 'history'],
-            'Urban': ['shopping', 'dining', 'city']
-        }
-    else:
-        clustered = {'General': activity_list}
-    
-    return {
-        'activity_patterns': dict(activities.most_common(10)),
-        'activity_clusters': clustered
-    }
-
-def process_mood_timeline(data: Dict) -> Dict:
-    """Create mood timeline with smoothing"""
-    timeline = []
-    for page in data['allPages']:
-        if 'textData' in page and page['textData'] and 'updatedAt' in page:
-            try:
-                text = str(page['textData'])
-                sentiment = TextBlob(text).sentiment.polarity
-                date = datetime.strptime(page['updatedAt'].split('+')[0], '%Y-%m-%dT%H:%M:%S.%f')
-                timeline.append({
-                    'date': date,
-                    'mood': (sentiment + 1) / 2  # Normalize to 0-1
-                })
-            except Exception as e:
-                print(f"Error processing mood timeline: {e}")
-                continue
-    
-    # Group by month and average
-    monthly_mood = {}
-    for entry in timeline:
-        month_year = f"{entry['date'].month}-{entry['date'].year}"
-        if month_year not in monthly_mood:
-            monthly_mood[month_year] = []
-        monthly_mood[month_year].append(entry['mood'])
-    
-    # Create smoothed timeline
-    smoothed_timeline = []
-    for month, moods in monthly_mood.items():
-        month_num, year = map(int, month.split('-'))
-        smoothed_timeline.append({
-            'month': month_num,
-            'year': year,
-            'mood': sum(moods)/len(moods)
-        })
-    
-    # Sort by date
-    smoothed_timeline.sort(key=lambda x: (x['year'], x['month']))
-    
-    return {
-        'mood_timeline': smoothed_timeline,
-        'avg_mood': sum(entry['mood'] for entry in smoothed_timeline)/len(smoothed_timeline) if smoothed_timeline else 0.5
-    }
-
-
-# Replace the KeyBERT-based functions with TextBlob/WordCloud alternatives
-
-def generate_place_summary(entries: List[Dict]) -> Dict:
-    """Generate 'Why You Loved This Place' summary using TextBlob"""
-    place_entries = [e for e in entries if "location" in e]
-    if not place_entries:
-        return {"error": "No location-tagged entries found"}
-    
-    # Group by location
-    location_groups = defaultdict(list)
-    for entry in place_entries:
-        location_groups[entry["location"]].append(entry["text"])
-    
-    # Generate summaries and key phrases
-    summaries = {}
-    for location, texts in location_groups.items():
-        combined_text = " ".join(texts)
-        
-        # Generate summary
-        summary = summarizer(
-            combined_text,
-            max_length=100,
-            min_length=30,
-            do_sample=False
-        )[0]["summary_text"]
-        
-        # Extract key phrases using TextBlob noun phrases
-        blob = TextBlob(combined_text)
-        noun_phrases = list(set(blob.noun_phrases))  # Get unique noun phrases
-        noun_phrases = [np for np in noun_phrases if len(np.split()) > 1]  # Filter single words
-        
-        # Get top 3 most frequent noun phrases
-        word_counts = Counter(noun_phrases)
-        top_phrases = [phrase for phrase, count in word_counts.most_common(3)]
-        
-        summaries[location] = {
-            "summary": summary,
-            "key_reasons": top_phrases
-        }
-    
-    return summaries
-
-def detect_throwback_moments(entries: List[Dict], current_date: str = None) -> Dict:
-    """Find forgotten memories using TextBlob sentiment analysis"""
-    if not current_date:
-        current_date = datetime.now().isoformat()
-    
-    # Filter entries from 6+ months ago
-    threshold_date = datetime.fromisoformat(current_date) - timedelta(days=180)
-    old_entries = [
-        e for e in entries 
-        if datetime.fromisoformat(e["createdAt"]) < threshold_date
-    ]
-    
-    if not old_entries:
-        return {"error": "No entries older than 6 months found"}
-    
-    # Cluster by time proximity (30-day windows)
-    timestamps = [
-        datetime.fromisoformat(e["createdAt"]).timestamp() 
-        for e in old_entries
-    ]
-    clustering = DBSCAN(eps=30*86400, min_samples=1).fit(np.array(timestamps).reshape(-1, 1))
-    
-    # Extract key memories per cluster
-    throwbacks = []
-    for cluster_id in set(clustering.labels_):
-        cluster_entries = [
-            e for i, e in enumerate(old_entries) 
-            if clustering.labels_[i] == cluster_id
-        ]
-        
-        # Find the most positive entry in the cluster
-        representative = max(
-            cluster_entries,
-            key=lambda e: TextBlob(e["text"]).sentiment.polarity
-        )
-        
-        # Get location and first positive sentence
-        location = representative.get("location", "unknown place")
-        blob = TextBlob(representative["text"])
-        positive_sentences = [
-            str(sent) for sent in blob.sentences 
-            if sent.sentiment.polarity > 0.3
-        ]
-        
-        memory_snippet = positive_sentences[0] if positive_sentences else representative["text"][:100] + "..."
-        
-        throwbacks.append({
-            "date": representative["createdAt"],
-            "location": location,
-            "memory": memory_snippet,
-            "sentiment_score": blob.sentiment.polarity
-        })
-    
-    # Sort by sentiment score (most positive first)
-    throwbacks.sort(key=lambda x: -x["sentiment_score"])
-    return {"throwbacks": throwbacks[:5]}  # Return top 5 most positive
-def process_bucket_list(data: Dict) -> Dict:
-    """Generate personalized bucket list suggestions"""
-    activities = set()
-    locations = set()
-    
-    for page in data['allPages']:
-        if 'tags' in page and page['tags']:
-            activities.update(page['tags'])
-        if 'location' in page and page['location']:
-            locations.add(page['location'])
-    
-    suggestions = []
-    
-    # Activity-based suggestions
-    if 'hiking' in activities:
-        suggestions.append("Trek to Everest Base Camp")
-    if 'beach' in activities:
-        suggestions.append("Relax in the Maldives")
-    if 'museum' in activities:
-        suggestions.append("Visit the Louvre in Paris")
-    
-    # Location-based suggestions
-    if not suggestions:
-        if any('Europe' in loc for loc in locations):
-            suggestions.append("Explore the Norwegian fjords")
-        elif any('Asia' in loc for loc in locations):
-            suggestions.append("Visit the temples of Kyoto")
-        else:
-            suggestions.append("Take a cross-country road trip")
-    
-    # Ensure we have at least 3 suggestions
-    default_suggestions = [
-        "See the Northern Lights",
-        "Go on an African safari",
-        "Visit Machu Picchu"
-    ]
-    
-    while len(suggestions) < 3:
-        suggestion = default_suggestions.pop(0)
-        if suggestion not in suggestions:
-            suggestions.append(suggestion)
-    
-    return {
-        'bucket_list': suggestions[:5],
-        'generated_from': {
-            'activities': list(activities),
-            'locations': list(locations)
-        }
-    }
-
-def process_insights(data: Dict) -> Dict:
-    """Process all insights with error handling"""
-    try:
-        print(f"Processing insights for {len(data['allPages'])} pages")
-        
-        results = {
-            'location_sentiment': process_location_sentiment(data),
-            'sentiment': process_sentiment(data),
-            'highlights': process_highlights(data),
-            'location_repeats': process_location_repeats(data),
-            'seasonal_patterns': process_seasonal_patterns(data),
-            'photo_timeline': process_photo_timeline(data),
-            'travel_personality': process_travel_personality(data),
-            'geographic_facts': process_geographic_facts(data),
-            'activity_patterns': process_activity_patterns(data),
-            'mood_timeline': process_mood_timeline(data),
-            'bucket_list': process_bucket_list(data),
-        }
-        
-        # Calculate additional metrics
-        if 'location_repeats' in results:
-            results['unique_locations_count'] = results['location_repeats']['total_unique']
-            del results['location_repeats']['total_unique']
-        
-        if 'geographic_facts' in results:
-            results['total_distance_km'] = results['geographic_facts'].pop('total_distance')
-        
-        print("Successfully processed insights")
-        return results
-        
-    except Exception as e:
-        print(f"Error in process_insights: {str(e)}")
-        return {
-            'error': str(e),
-            'status': 'failed'
-        }
-
-@app.route('/')
-def home() -> str:
-    """Health check endpoint"""
-    return "Travel Insights API is running", 200
-
-@app.route('/process-insights', methods=['POST', 'OPTIONS','GET'])  # Add OPTIONS
-def process_insights_endpoint():
-    """Main API endpoint for processing insights"""
+@app.route('/process-insights', methods=['POST'])
+def process_insights():
+    # Enhanced CORS headers
     if request.method == 'OPTIONS':
-        # Handle preflight request
         response = jsonify({'status': 'preflight'})
         response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type')
-        response.headers.add('Access-Control-Allow-Methods', 'POST')
+        response.headers.add('Access-Control-Allow-Headers', '*')
+        response.headers.add('Access-Control-Allow-Methods', 'POST, OPTIONS, GET')
         return response
 
+    if request.method != 'POST':
+        print(f"Invalid method received: {request.method}")  # Debug
+        return jsonify({'error': 'Method not allowed'}), 405
+
     try:
-        # More lenient content type check
-        if not request.is_json:
-            return jsonify({
-                'error': 'Unsupported Media Type',
-                'message': 'Content-Type must be application/json'
-            }), 415
-
-        data = request.get_json()
-        if not data or 'allPages' not in data:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Missing required field: allPages'
-            }), 400
-
-        results = process_insights(data)
-        response = jsonify(results)
+        print(f"Request data: {request.get_json()}")  # Debug
+        data = request.get_json() or {}
+        
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        response = jsonify({
+            'travel_summaries': travel_summaries(data),
+            'mood_mapping': mood_mapping(data),
+            'recommendations': recommendations(data),
+            'travel_style': travel_style(data),
+            'spot_analysis': spot_analysis(data),
+            'status': 'success'
+        })
         response.headers.add('Access-Control-Allow-Origin', '*')
-        return response, 200
-
+        return response
     except Exception as e:
-        print(f"Endpoint error: {str(e)}")
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': str(e)
-        }), 500
+        print(f"Error processing request: {str(e)}")  # Debug
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+# ... (keep all other functions the same)
+# 1. Automated Travel Summaries & Highlights
+def travel_summaries(data):
+    summaries = []
+    loc_clusters = defaultdict(list)
+    
+    for page in get(data, 'allPages') or []:
+        if (text := get(page, 'textData')) and (loc := get(page, 'location')):
+            sentiment = TextBlob(str(text)).sentiment.polarity
+            if sentiment > 0.6 and len(text.split()) > 15:
+                loc_clusters[loc].append(text[:100] + "...")
+    
+    for loc, texts in loc_clusters.items():
+        if texts:
+            summaries.append({
+                'location': loc,
+                'highlight': f"Loved {loc}: " + texts[0]
+            })
+    
+    return {'summaries': summaries[:5]}
+
+# 2. Sentiment & Mood Mapping
+def mood_mapping(data):
+    location_sentiments = defaultdict(list)
+    for page in get(data, 'allPages') or []:
+        if (text := get(page, 'textData')) and (loc := get(page, 'location')):
+            sentiment = TextBlob(str(text)).sentiment.polarity
+            location_sentiments[loc].append(sentiment)
+    
+    happiest = sorted(
+        [(loc, sum(sents)/len(sents)) for loc, sents in location_sentiments.items()],
+        key=lambda x: -x[1]
+    )[:3]
+    
+    return {
+        'happiest_places': [{'location': loc, 'score': score} for loc, score in happiest],
+        'mood_map': {loc: 'positive' if sum(sents)/len(sents) > 0 else 'negative'
+                    for loc, sents in location_sentiments.items()}
+    }
+
+# 3. Personalized Recommendations
+def recommendations(data):
+    activity_keywords = Counter()
+    location_types = Counter()
+    
+    for page in get(data, 'allPages') or []:
+        if text := get(page, 'textData'):
+            text = str(text).lower()
+            if 'hiking' in text or 'trek' in text:
+                activity_keywords['hiking'] += 1
+            if 'museum' in text or 'gallery' in text:
+                activity_keywords['culture'] += 1
+            if 'beach' in text or 'coast' in text:
+                location_types['beach'] += 1
+            if 'mountain' in text or 'alps' in text:
+                location_types['mountain'] += 1
+    
+    recs = []
+    if activity_keywords:
+        top_activity = activity_keywords.most_common(1)[0][0]
+        recs.append(f"Try more {top_activity} activities")
+    if location_types:
+        top_loc = location_types.most_common(1)[0][0]
+        recs.append(f"Visit more {top_loc} destinations")
+    
+    return {'recommendations': recs or ["Explore new places"]}
+
+# 4. Travel Style Classification
+def travel_style(data):
+    style_counts = defaultdict(int)
+    for page in get(data, 'allPages') or []:
+        if text := get(page, 'textData'):
+            text = str(text).lower()
+            if any(word in text for word in ['adventure', 'hiking', 'trekking']):
+                style_counts['adventurous'] += 1
+            elif any(word in text for word in ['relax', 'spa', 'chill']):
+                style_counts['relaxed'] += 1
+            elif any(word in text for word in ['museum', 'history', 'culture']):
+                style_counts['cultural'] += 1
+    
+    if style_counts:
+        style = max(style_counts.items(), key=lambda x: x[1])[0]
+    else:
+        style = 'balanced'
+    
+    return {'travel_style': style}
+
+# 5. Unexpected Gems vs Tourist Hotspots
+def spot_analysis(data):
+    locations = Counter()
+    location_sentiments = defaultdict(list)
+    
+    for page in get(data, 'allPages') or []:
+        if (loc := get(page, 'location')) and (text := get(page, 'textData')):
+            locations[loc] += 1
+            location_sentiments[loc].append(TextBlob(str(text)).sentiment.polarity)
+    
+    if not locations:
+        return {'analysis': []}
+    
+    avg_freq = sum(locations.values())/len(locations)
+    hidden_gems = []
+    hotspots = []
+    
+    for loc, count in locations.items():
+        avg_sentiment = sum(location_sentiments[loc])/len(location_sentiments[loc])
+        if count < avg_freq and avg_sentiment > 0.3:
+            hidden_gems.append({'location': loc, 'type': 'hidden_gem'})
+        elif count > avg_freq * 1.5:
+            hotspots.append({'location': loc, 'type': 'hotspot'})
+    
+    return {
+        'hidden_gems': hidden_gems[:3],
+        'tourist_hotspots': hotspots[:3]
+    }
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)

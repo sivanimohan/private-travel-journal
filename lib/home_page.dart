@@ -5,7 +5,8 @@ import 'create_folder.dart';
 import 'folder.dart';
 import 'dart:io';
 import 'world_map_page.dart';
-import 'insight.dart'; // Updated import to match the file name
+import 'insight.dart';
+import 'package:traveljournal/login.dart';
 
 class HomePage extends StatefulWidget {
   final Client client;
@@ -26,6 +27,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   late final Account account;
   late final Databases databases;
+
+  // Define the _folders variable to store folder data
   List<Map<String, dynamic>> _folders = [];
 
   @override
@@ -36,6 +39,7 @@ class _HomePageState extends State<HomePage> {
     _loadFolders();
   }
 
+  // Method to load folders from the database
   Future<void> _loadFolders() async {
     try {
       final result = await databases.listDocuments(
@@ -59,76 +63,42 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<String?> getIpAddress() async {
-    for (var interface in await NetworkInterface.list()) {
-      for (var addr in interface.addresses) {
-        if (addr.type == InternetAddressType.IPv4) {
-          return addr.address;
-        }
-      }
-    }
-    return null;
-  }
-
-  void _createFolder() async {
+  Future<bool> _isUserAuthenticated() async {
     try {
-      final result = await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => CreateFolderPage(
-            client: widget.client,
-            userId: widget.userId,
-            clientName: widget.fullName,
-          ),
-        ),
-      );
-
-      if (result != null) {
-        String? ipAddress = await getIpAddress();
-
-        await databases.createDocument(
-          databaseId: '67c32fc700070ceeadac',
-          collectionId: '67eab63d001054f7631a',
-          documentId: ID.unique(),
-          data: {
-            'folderId': ID.unique(),
-            'userId': widget.userId,
-            'name': result,
-            'createdAt': DateTime.now().toIso8601String(),
-            'location': ipAddress ?? '0.0.0.0',
-          },
-          permissions: [
-            Permission.create(Role.user(widget.userId)),
-            Permission.read(Role.user(widget.userId)),
-            Permission.update(Role.user(widget.userId)),
-            Permission.delete(Role.user(widget.userId)),
-          ],
-        );
-
-        _loadFolders();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Folder "$result" created successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      await account
+          .get(); // This will throw an exception if the user is not authenticated
+      return true;
     } catch (e) {
-      print('Error creating folder: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Failed to create folder: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      return false;
     }
   }
 
   Future<void> _signOut() async {
     try {
+      // Check if the user is authenticated
+      bool isAuthenticated = await _isUserAuthenticated();
+
+      if (!isAuthenticated) {
+        // If not authenticated, redirect to login
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => LoginPage(client: widget.client),
+          ),
+        );
+        return;
+      }
+
+      // Delete the current session
       await account.deleteSession(sessionId: 'current');
-      Navigator.pushReplacementNamed(context, '/login');
+
+      // Redirect to login page
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => LoginPage(client: widget.client),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -208,7 +178,7 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       '👋 Welcome, ${widget.fullName}!',
                       style: const TextStyle(
-                        fontFamily: 'JosefinSans', // Font changed
+                        fontFamily: 'JosefinSans',
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -278,8 +248,7 @@ class _HomePageState extends State<HomePage> {
                                     Text(
                                       folder['name'],
                                       style: const TextStyle(
-                                        fontFamily:
-                                            'JosefinSans', // Font changed
+                                        fontFamily: 'JosefinSans',
                                         fontSize: 18,
                                         fontWeight: FontWeight.w500,
                                         color: Color(0xFF2C7DA0),
@@ -302,16 +271,17 @@ class _HomePageState extends State<HomePage> {
           ),
           Positioned(
             right: 16,
-            bottom: 80, // Moved up to make space for the new button
+            bottom: 80,
             child: FloatingActionButton(
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => InsightPage(
-                      databases: databases,
                       userId: widget.userId,
-                      client: widget.client,
+                      userData: {
+                        'allPages': [], // Pass actual user data here as needed
+                      },
                     ),
                   ),
                 );
@@ -340,7 +310,17 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _createFolder,
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => CreateFolderPage(
+                client: widget.client,
+                userId: widget.userId,
+              ),
+            ),
+          );
+        },
         backgroundColor: const Color(0xFF2C7DA0),
         child: const Icon(Icons.add),
       ),

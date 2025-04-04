@@ -31,7 +31,7 @@ class A4WhitePage extends StatefulWidget {
 }
 
 class _A4WhitePageState extends State<A4WhitePage> {
-  List<Map<String, dynamic>> media = [];
+  List<Map<String, dynamic>> contentItems = [];
   String? selectedLocation;
   Color backgroundColor = Colors.white;
   late Databases databases;
@@ -39,17 +39,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
   final ImagePicker _picker = ImagePicker();
   bool isSaving = false;
   bool isSavingLocation = false;
-  List<String> locations = [];
-
-  // Text input
-  List<TextData> textDataList = [];
-  bool isAddingText = false;
-  String selectedFont = 'DeliciousHandrawn';
-  Color selectedTextColor = Colors.black;
-  List<String> fonts = [
-    'DeliciousHandrawn',
-    'JosefinSans',
-  ];
 
   @override
   void initState() {
@@ -57,7 +46,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     databases = Databases(widget.client);
     storage = Storage(widget.client);
     _loadSavedContent();
-    textDataList = [];
   }
 
   @override
@@ -68,17 +56,16 @@ class _A4WhitePageState extends State<A4WhitePage> {
   Future<void> _saveContent() async {
     try {
       setState(() => isSavingLocation = true);
-      final textDataToSave = jsonEncode(textDataList.map((text) {
+      final contentDataToSave = jsonEncode(contentItems.map((item) {
         return {
-          'text': text.text,
-          'font': text.font,
-          'color': text.color.value,
-          'position': {'dx': text.position.dx, 'dy': text.position.dy},
-          'size': text.size,
+          'fileId': item['fileId'],
+          'text': item['text'],
+          'textColor': item['textColor'].value,
+          'position': {'dx': item['position'].dx, 'dy': item['position'].dy},
+          'width': item['width'],
+          'height': item['height'],
         };
       }).toList());
-
-      final mediaDataToSave = media.map((m) => m['fileId'] as String).toList();
 
       final documentData = {
         'pageId': widget.pageId,
@@ -86,15 +73,11 @@ class _A4WhitePageState extends State<A4WhitePage> {
         'folderId': widget.folderId,
         'pageName': widget.pageName,
         'backgroundColor': backgroundColor.value,
-        'media': mediaDataToSave,
-        'textData': textDataToSave,
+        'textData': contentDataToSave,
         'location': selectedLocation ?? '',
-        'updatedAt':
-            DateTime.now().toUtc().toIso8601String(), // Use 'updatedAt'
-        'datetime': null, // Clear 'datetime' to avoid schema conflict
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+        'datetime': null,
       };
-
-      debugPrint('Saving document: ${jsonEncode(documentData)}');
 
       await databases.updateDocument(
         databaseId: '67c32fc700070ceeadac',
@@ -136,40 +119,56 @@ class _A4WhitePageState extends State<A4WhitePage> {
       );
 
       final data = doc.data;
+      debugPrint('Loaded document data: $data');
+
       setState(() {
         backgroundColor = _parseBackgroundColor(data['backgroundColor']);
         selectedLocation = _parseLocation(data);
-        textDataList = [];
+        contentItems = [];
 
-        if (data['textData'] != null) {
+        if (data['textData'] != null && data['textData'] is String) {
           try {
-            final decoded = jsonDecode(data['textData'] as String) as List;
-            textDataList = decoded.map((item) {
-              return TextData(
-                text: item['text'] ?? '',
-                font: item['font'] ?? 'DeliciousHandrawn',
-                color: Color(item['color'] ?? Colors.black.value),
-                position: Offset(
-                  (item['position']['dx'] ?? 50).toDouble(),
-                  (item['position']['dy'] ?? 50).toDouble(),
+            final decoded = jsonDecode(data['textData']) as List<dynamic>;
+            debugPrint('Decoded textData: $decoded');
+            contentItems = decoded.map((item) {
+              final positionData = item['position'] is Map
+                  ? Map<String, dynamic>.from(item['position'])
+                  : {'dx': 20, 'dy': 20};
+              return {
+                'fileId': item['fileId']?.toString() ?? '',
+                'text': item['text']?.toString() ?? '',
+                'textColor': Color(item['textColor'] is int
+                    ? item['textColor']
+                    : Colors.black.value),
+                'position': Offset(
+                  (positionData['dx'] ?? 20).toDouble(),
+                  (positionData['dy'] ?? 20).toDouble(),
                 ),
-                size: (item['size'] ?? 28).toDouble(),
-              );
+                'width': (item['width'] ??
+                        (MediaQuery.of(context).size.width < 600
+                            ? 200.0
+                            : 300.0))
+                    .toDouble(),
+                'height': (item['height'] ??
+                        (MediaQuery.of(context).size.width < 600
+                            ? 266.0
+                            : 400.0))
+                    .toDouble(),
+                'value': null, // Will be populated by _loadMediaData
+              };
             }).toList();
           } catch (e) {
-            debugPrint('Error parsing text data: $e');
+            debugPrint('Error decoding contentData: $e');
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to parse content data: $e',
+                    style: TextStyle(fontFamily: 'JosefinSans')),
+              ),
+            );
           }
+        } else {
+          debugPrint('No contentData found or not a string');
         }
-
-        media = (data['media'] as List<dynamic>? ?? []).map((fileId) {
-          return {
-            'type': 'image',
-            'fileId': fileId,
-            'position': const Offset(50, 50),
-            'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
-            'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
-          };
-        }).toList();
       });
 
       await _loadMediaData();
@@ -178,8 +177,9 @@ class _A4WhitePageState extends State<A4WhitePage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text('Error loading content: $e',
-                  style: TextStyle(fontFamily: 'JosefinSans'))),
+            content: Text('Error loading content: $e',
+                style: TextStyle(fontFamily: 'JosefinSans')),
+          ),
         );
       }
     }
@@ -187,12 +187,13 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
   Future<void> _loadMediaData() async {
     try {
-      for (int i = 0; i < media.length; i++) {
-        final item = media[i];
-        if (item['fileId'] != null && item['value'] == null) {
+      for (int i = 0; i < contentItems.length; i++) {
+        final item = contentItems[i];
+        if (item['fileId'] != null &&
+            item['fileId'].isNotEmpty &&
+            item['value'] == null) {
           try {
             if (kIsWeb) {
-              // Load file for web
               final response = await storage.getFileView(
                 bucketId: bucketId,
                 fileId: item['fileId'],
@@ -202,25 +203,31 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 fileId: item['fileId'],
               );
               final mimeType = _getMimeType(file.name);
-
-              // Set media value for web
-              media[i]['value'] =
-                  "data:$mimeType;base64,${base64Encode(response)}";
+              setState(() {
+                contentItems[i]['value'] =
+                    "data:$mimeType;base64,${base64Encode(response)}";
+              });
+              debugPrint('Loaded media for fileId ${item['fileId']} (web)');
             } else {
-              // Load file for mobile
               final url = await storage.getFileDownload(
                 bucketId: bucketId,
                 fileId: item['fileId'],
               );
-              media[i]['value'] = url.toString();
+              setState(() {
+                contentItems[i]['value'] = url.toString();
+              });
+              debugPrint('Loaded media for fileId ${item['fileId']} (non-web)');
             }
           } catch (e) {
             debugPrint('Error loading file ${item['fileId']}: $e');
-            media[i]['hasError'] = true;
+            setState(() {
+              contentItems[i]['hasError'] = true;
+            });
           }
+        } else {
+          debugPrint('Skipping media load for item $i: ${item['fileId']}');
         }
       }
-      setState(() {});
     } catch (e) {
       debugPrint('Error in _loadMediaData: $e');
       if (mounted) {
@@ -251,77 +258,138 @@ class _A4WhitePageState extends State<A4WhitePage> {
     }
   }
 
+  double _getNextVerticalPosition() {
+    double lastY = 20.0;
+
+    if (contentItems.isNotEmpty) {
+      final lastItem = contentItems.last;
+      final imageHeight = lastItem['height'] as double;
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: lastItem['text'],
+          style: TextStyle(
+            fontFamily: 'DeliciousHandrawn',
+            fontSize: 28,
+            color: lastItem['textColor'],
+          ),
+        ),
+        maxLines: null,
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: MediaQuery.of(context).size.width - 40);
+
+      lastY = lastItem['position'].dy + imageHeight + textPainter.height + 10;
+    }
+
+    debugPrint('Next Y position: $lastY');
+    return lastY;
+  }
+
   Future<void> _addMedia(String type) async {
     try {
-      final XFile? file;
-      if (type == 'image') {
-        file = await _picker.pickImage(source: ImageSource.gallery);
-      } else {
-        return;
-      }
-
+      final XFile? file = await _picker.pickImage(source: ImageSource.gallery);
       if (file == null || !mounted) return;
-
-      // Show caption dialog
-      final caption = await showDialog<String>(
-        context: context,
-        builder: (context) {
-          final controller = TextEditingController();
-          return AlertDialog(
-            title: Text('Add Image Caption',
-                style: TextStyle(fontFamily: 'Josefin Sans')),
-            content: TextField(
-              controller: controller,
-              decoration: InputDecoration(
-                hintText: 'Write a caption...',
-                hintStyle: TextStyle(fontFamily: 'Josefin Sans'),
-              ),
-            ),
-            actions: [
-              TextButton(
-                child: Text('Cancel',
-                    style: TextStyle(fontFamily: 'Josefin Sans')),
-                onPressed: () => Navigator.pop(context),
-              ),
-              TextButton(
-                child: Text('OK', style: TextStyle(fontFamily: 'Josefin Sans')),
-                onPressed: () => Navigator.pop(context, controller.text),
-              ),
-            ],
-          );
-        },
-      );
-
-      if (caption == null) return; // User cancelled
 
       final bytes = await file.readAsBytes();
       final fileName = file.name;
       final fileId = ID.unique();
 
-      // Upload to storage
       final uploadedFile = await storage.createFile(
         bucketId: bucketId,
         fileId: fileId,
-        file: InputFile.fromBytes(
-          bytes: bytes,
-          filename: fileName,
+        file: InputFile.fromBytes(bytes: bytes, filename: fileName),
+      );
+
+      final screenWidth = MediaQuery.of(context).size.width;
+      final isMobile = screenWidth < 600;
+      final width = isMobile ? screenWidth * 0.8 : 300.0;
+      final height = isMobile ? width * 4 / 3 : 400.0;
+
+      final nextY = _getNextVerticalPosition();
+
+      final TextEditingController _textController = TextEditingController();
+      Color textColor = Colors.black;
+
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Add Text for Image",
+              style: TextStyle(fontFamily: 'JosefinSans')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _textController,
+                autofocus: true,
+                maxLines: null,
+                style: TextStyle(fontFamily: 'DeliciousHandrawn', fontSize: 28),
+                decoration: const InputDecoration(
+                  hintText: "Type something...",
+                  hintStyle: TextStyle(fontFamily: 'JosefinSans'),
+                ),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () async {
+                  await showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text("Choose Text Color",
+                          style: TextStyle(fontFamily: 'JosefinSans')),
+                      content: BlockPicker(
+                        pickerColor: textColor,
+                        onColorChanged: (color) => textColor = color,
+                      ),
+                      actions: [
+                        TextButton(
+                          child: const Text("Done",
+                              style: TextStyle(fontFamily: 'JosefinSans')),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (mounted) setState(() {});
+                },
+                child: const Text("Pick Text Color",
+                    style: TextStyle(fontFamily: 'JosefinSans')),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              child: const Text("Cancel",
+                  style: TextStyle(fontFamily: 'JosefinSans')),
+              onPressed: () => Navigator.pop(context),
+            ),
+            TextButton(
+              child:
+                  const Text("OK", style: TextStyle(fontFamily: 'JosefinSans')),
+              onPressed: () {
+                final text = _textController.text.trim();
+                if (text.isNotEmpty) {
+                  Navigator.pop(context);
+                }
+              },
+            ),
+          ],
         ),
       );
 
-      // Add to media list
+      final text = _textController.text.trim();
+      if (text.isEmpty || !mounted) return;
+
       setState(() {
-        media.add({
-          'type': type,
+        contentItems.add({
+          'type': 'image',
           'fileId': uploadedFile.$id,
           'value': type == 'image' && kIsWeb
               ? "data:${_getMimeType(fileName)};base64,${base64Encode(bytes)}"
               : null,
-          'position': Offset(50, 50),
-          'width': MediaQuery.of(context).size.width < 600 ? 200.0 : 300.0,
-          'height': MediaQuery.of(context).size.width < 600 ? 266.0 : 400.0,
-          'caption': caption,
-          'font': selectedFont,
-          'textColor': selectedTextColor.value,
+          'text': text,
+          'textColor': textColor,
+          'position': Offset(20, nextY),
+          'width': width,
+          'height': height,
         });
       });
     } catch (e) {
@@ -338,84 +406,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
       }
       debugPrint('Failed to add media: $e');
     }
-  }
-
-  Future<Map<String, dynamic>> _collectInsightsData() async {
-    final doc = await databases.getDocument(
-      databaseId: '67c32fc700070ceeadac',
-      collectionId: '67eab72f0030b02f1623',
-      documentId: widget.pageId,
-    );
-
-    final data = doc.data;
-    final allPages = await databases.listDocuments(
-      databaseId: '67c32fc700070ceeadac',
-      collectionId: '67eab72f0030b02f1623',
-      queries: [
-        Query.equal('userId', widget.userId),
-      ],
-    );
-
-    return {
-      'currentPage': {
-        'textData': data['textData'],
-        'media': data['media'],
-        'location': data['location'],
-        'updatedAt': data['updatedAt'],
-      },
-      'allPages': allPages.documents.map((d) => d.data).toList(),
-      'bucketId': bucketId,
-      'userId': widget.userId,
-    };
-  }
-
-  void _addText(Offset position) {
-    final TextEditingController _textController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Enter Text",
-            style: TextStyle(fontFamily: 'JosefinSans')),
-        content: TextField(
-          controller: _textController,
-          autofocus: true,
-          maxLines: null,
-          style: TextStyle(fontFamily: 'DeliciousHandrawn', fontSize: 28),
-          decoration: const InputDecoration(
-            hintText: "Type something...",
-            hintStyle: TextStyle(fontFamily: 'JosefinSans'),
-          ),
-        ),
-        actions: [
-          TextButton(
-            child: const Text("Cancel",
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () => Navigator.pop(context),
-          ),
-          TextButton(
-            child:
-                const Text("OK", style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () {
-              final text = _textController.text.trim();
-              if (text.isNotEmpty) {
-                setState(() {
-                  textDataList.add(TextData(
-                    text: text,
-                    font: selectedFont,
-                    color: selectedTextColor,
-                    position: position,
-                    size: 28,
-                  ));
-                  isAddingText = false;
-                });
-              }
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
   }
 
   void _showOptionsMenu() {
@@ -440,26 +430,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
                 ),
               ),
               SizedBox(height: 8),
-              ListTile(
-                leading: Icon(Icons.text_fields, color: Colors.blue),
-                title: Text('Add Text',
-                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
-                onTap: () {
-                  Navigator.pop(context);
-                  setState(() => isAddingText = true);
-                },
-              ),
-              Divider(height: 1),
-              ListTile(
-                leading: Icon(Icons.color_lens, color: Colors.purple),
-                title: Text('Text Color',
-                    style: TextStyle(fontFamily: 'Josefin Sans', fontSize: 16)),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showTextColorPicker();
-                },
-              ),
-              Divider(height: 1),
               ListTile(
                 leading: Icon(Icons.image, color: Colors.green),
                 title: Text('Add Image',
@@ -487,73 +457,28 @@ class _A4WhitePageState extends State<A4WhitePage> {
     );
   }
 
-  void _showTextColorPicker() {
-    final List<Color> colors = [
-      Colors.red, // 1
-      Colors.pink, // 2
-      Colors.purple, // 3
-      Colors.deepPurple, // 4
-      Colors.indigo, // 5
-      Colors.blue, // 6
-      Colors.cyan, // 7
-      Colors.teal, // 8
-      Colors.green, // 9
-      Colors.amber, // 10
-      Colors.orange, // 11
-      Colors.deepOrange, // 12
-      Color(0xFF7D6E99), // 15
-      Color(0xFFC97C5D), // 16
-      Color(0xFF4C9A9A), // 17
-      Color(0xFF7A6F80), // 18
-      Color(0xFFC2A661), // 19
-      Colors.brown, // 13
-      Colors.blueGrey, // 14
-      Colors.black, // 20
-    ];
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color",
-            style: TextStyle(fontFamily: 'JosefinSans')),
-        content: BlockPicker(
-          pickerColor: selectedTextColor,
-          availableColors: colors,
-          onColorChanged: (color) => setState(() => selectedTextColor = color),
-        ),
-        actions: [
-          TextButton(
-            child:
-                const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _changeBackgroundColor() {
     final List<Color> colors = [
-      Colors.white, // 4
-      Color(0xFFE8C8B8), // 1 - Blush Pink Nude
-      Color(0xFF6EE7F2), // 13
-      Color(0xFFFF8FAB), // 14
-      Color(0xFFE6E6FA), // 17 - Lavender Pastel
-      Colors.purple, // 7
-      Colors.indigo, // 9
-      Colors.blue, // 10
-      Colors.lightBlue, // 11
-      Colors.cyan, // 8
-      Colors.teal, // 12
-      Color(0xFFB5EAD7), // 18 - Mint Green
-      Color(0xFFEFCFE3), // 15
-      Color(0xFFF7A399), // 16
-      Color(0xFFFFDAC1), // 19 - Peach Pastel
-      Color(0xFFD4B8A8), // 20 - Warm Beige
-      Color(0xFFB38B6D), // 2 - Light Coffee
-      Colors.brown, // 5
-      Colors.grey, // 6
-      Colors.black, // 3
+      Colors.white,
+      Color(0xFFE8C8B8),
+      Color(0xFF6EE7F2),
+      Color(0xFFFF8FAB),
+      Color(0xFFE6E6FA),
+      Colors.purple,
+      Colors.indigo,
+      Colors.blue,
+      Colors.lightBlue,
+      Colors.cyan,
+      Colors.teal,
+      Color(0xFFB5EAD7),
+      Color(0xFFEFCFE3),
+      Color(0xFFF7A399),
+      Color(0xFFFFDAC1),
+      Color(0xFFD4B8A8),
+      Color(0xFFB38B6D),
+      Colors.brown,
+      Colors.grey,
+      Colors.black,
     ];
 
     showDialog(
@@ -587,15 +512,22 @@ class _A4WhitePageState extends State<A4WhitePage> {
         backgroundColor: Color(0xFFE5D5C3),
         title: Row(
           children: [
-            Text(widget.pageName,
+            Expanded(
+              child: Text(
+                widget.pageName,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            if (selectedLocation != null && !isMobile)
+                style: TextStyle(fontFamily: 'JosefinSans'),
+              ),
+            ),
+            if (selectedLocation != null)
               Padding(
                 padding: const EdgeInsets.only(left: 8.0),
-                child: Text('Location: $selectedLocation',
-                    style: const TextStyle(
-                        fontSize: 14, fontFamily: 'JosefinSans')),
+                child: Text(
+                  'Location: $selectedLocation',
+                  style:
+                      const TextStyle(fontSize: 14, fontFamily: 'JosefinSans'),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
           ],
         ),
@@ -656,34 +588,20 @@ class _A4WhitePageState extends State<A4WhitePage> {
         builder: (context, constraints) {
           double contentHeight = [
             constraints.maxHeight,
-            100.0 + (textDataList.length * 30.0),
-            media.fold(0.0,
-                (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0),
+            100.0 + (contentItems.length * 450.0),
           ].reduce(max);
 
           return SingleChildScrollView(
             child: Container(
               height: contentHeight,
-              child: GestureDetector(
-                onTap: () {
-                  if (isAddingText) {
-                    final renderBox = context.findRenderObject() as RenderBox;
-                    final tapPosition = renderBox.globalToLocal(
-                      (context.findRenderObject() as RenderBox)
-                          .localToGlobal(Offset.zero),
-                    );
-                    _addText(tapPosition);
-                  }
-                },
-                child: Stack(
-                  children: [
-                    Container(
-                      color: backgroundColor,
-                      height: contentHeight,
-                    ),
-                    ..._buildDraggableElements(isMobile),
-                  ],
-                ),
+              child: Stack(
+                children: [
+                  Container(
+                    color: backgroundColor,
+                    height: contentHeight,
+                  ),
+                  ..._buildDraggableElements(isMobile),
+                ],
               ),
             ),
           );
@@ -700,38 +618,25 @@ class _A4WhitePageState extends State<A4WhitePage> {
 
   List<Widget> _buildDraggableElements(bool isMobile) {
     final elements = <Widget>[];
-    final screenHeight = MediaQuery.of(context).size.height;
-    final textHeight = 100.0 + (textDataList.length * 30.0);
-    final mediaHeight = media.fold(
-        0.0, (sum, item) => sum + (item['height'] as double? ?? 0.0) + 20.0);
-    final contentHeight = [screenHeight, textHeight, mediaHeight].reduce(max);
+    final contentHeight = [
+      MediaQuery.of(context).size.height,
+      100.0 + (contentItems.length * 450.0),
+    ].reduce(max);
 
-    for (var textData in textDataList) {
-      elements.add(
-        Positioned(
-          left: textData.position.dx,
-          top: min<double>(textData.position.dy, contentHeight - 30),
-          child: _buildDraggableText(textData, isMobile, contentHeight),
-        ),
-      );
-    }
-
-    for (int i = 0; i < media.length; i++) {
-      final mediaItem = media[i];
-      final itemHeight =
-          (mediaItem['height'] as double? ?? (isMobile ? 266.0 : 400.0));
+    for (int i = 0; i < contentItems.length; i++) {
+      final item = contentItems[i];
+      final totalHeight = (item['height'] as double) + 28;
 
       elements.add(
         Positioned(
-          left: mediaItem['position'].dx,
-          top:
-              min<double>(mediaItem['position'].dy, contentHeight - itemHeight),
-          child: DraggableImage(
-            key: ValueKey('image_${mediaItem['fileId']}_$i'),
-            mediaItem: mediaItem,
+          left: item['position'].dx,
+          top: min<double>(item['position'].dy, contentHeight - totalHeight),
+          child: ImageTextPair(
+            key: ValueKey('pair_${item['fileId']}_$i'),
+            item: item,
             onPositionChanged: (updatedItem) =>
-                setState(() => media[i] = updatedItem),
-            onDelete: () => setState(() => media.removeAt(i)),
+                setState(() => contentItems[i] = updatedItem),
+            onDelete: () => setState(() => contentItems.removeAt(i)),
             isMobile: isMobile,
             maxHeight: contentHeight,
           ),
@@ -740,136 +645,6 @@ class _A4WhitePageState extends State<A4WhitePage> {
     }
 
     return elements;
-  }
-
-  Widget _buildDraggableText(
-      TextData textData, bool isMobile, double contentHeight) {
-    return Draggable(
-      feedback: Material(
-        child: Text(
-          textData.text,
-          style: TextStyle(
-            fontFamily: textData.font,
-            color: textData.color,
-            fontSize: textData.size,
-          ),
-        ),
-      ),
-      childWhenDragging: Container(),
-      onDragEnd: (details) => setState(() {
-        textData.position = Offset(
-          details.offset.dx,
-          min<double>(details.offset.dy, contentHeight - 30),
-        );
-      }),
-      child: GestureDetector(
-        onLongPress: () => _showTextOptions(textData),
-        child: Text(
-          textData.text,
-          style: TextStyle(
-            fontFamily: textData.font,
-            color: textData.color,
-            fontSize: textData.size,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showTextOptions(TextData textData) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.edit),
-            title: const Text('Edit Text',
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            onTap: () {
-              Navigator.pop(context);
-              _editText(textData);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete),
-            title: const Text('Delete',
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            onTap: () {
-              setState(() => textDataList.remove(textData));
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.color_lens),
-            title: const Text('Change Color',
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            onTap: () {
-              Navigator.pop(context);
-              _changeTextColor(textData);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _editText(TextData textData) {
-    final TextEditingController _textController =
-        TextEditingController(text: textData.text);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Edit Text",
-            style: TextStyle(fontFamily: 'JosefinSans')),
-        content: TextField(
-          controller: _textController,
-          autofocus: true,
-          maxLines: null,
-          style: TextStyle(fontFamily: 'DeliciousHandrawn'),
-        ),
-        actions: [
-          TextButton(
-            child: const Text("Cancel",
-                style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () => Navigator.pop(context),
-          ),
-          TextButton(
-            child:
-                const Text("Save", style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () {
-              final newText = _textController.text.trim();
-              if (newText.isNotEmpty) {
-                setState(() => textData.text = newText);
-              }
-              Navigator.pop(context);
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _changeTextColor(TextData textData) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Choose Text Color",
-            style: TextStyle(fontFamily: 'JosefinSans')),
-        content: BlockPicker(
-          pickerColor: textData.color,
-          onColorChanged: (color) => setState(() => textData.color = color),
-        ),
-        actions: [
-          TextButton(
-            child:
-                const Text("Done", style: TextStyle(fontFamily: 'JosefinSans')),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -887,56 +662,16 @@ String? _parseLocation(Map<String, dynamic> data) {
   return null;
 }
 
-class TextData {
-  String text;
-  String font;
-  Color color;
-  Offset position;
-  double size;
-
-  TextData({
-    required this.text,
-    required this.font,
-    required this.color,
-    required this.position,
-    this.size = 28,
-  });
-
-  factory TextData.fromJson(Map<String, dynamic> json) {
-    final positionData = json['position'] is Map
-        ? Map<String, dynamic>.from(json['position'])
-        : {'dx': 50, 'dy': 50};
-
-    return TextData(
-      text: json['text']?.toString() ?? '',
-      font: json['font']?.toString() ?? 'DeliciousHandrawn',
-      color: Color(json['color'] is int ? json['color'] : Colors.black.value),
-      position: Offset(
-        (positionData['dx'] ?? 50).toDouble(),
-        (positionData['dy'] ?? 50).toDouble(),
-      ),
-      size: (json['size'] ?? 28).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() => {
-        'text': text,
-        'font': font,
-        'color': color.value,
-        'position': {'dx': position.dx, 'dy': position.dy},
-      };
-}
-
-class DraggableImage extends StatefulWidget {
-  final Map<String, dynamic> mediaItem;
+class ImageTextPair extends StatefulWidget {
+  final Map<String, dynamic> item;
   final Function(Map<String, dynamic>) onPositionChanged;
   final Function() onDelete;
   final bool isMobile;
   final double maxHeight;
 
-  const DraggableImage({
+  const ImageTextPair({
     super.key,
-    required this.mediaItem,
+    required this.item,
     required this.onPositionChanged,
     required this.onDelete,
     required this.isMobile,
@@ -944,10 +679,10 @@ class DraggableImage extends StatefulWidget {
   });
 
   @override
-  State<DraggableImage> createState() => _DraggableImageState();
+  State<ImageTextPair> createState() => _ImageTextPairState();
 }
 
-class _DraggableImageState extends State<DraggableImage> {
+class _ImageTextPairState extends State<ImageTextPair> {
   bool _isHovering = false;
   double _scale = 1.0;
   Offset _panOffset = Offset.zero;
@@ -961,7 +696,7 @@ class _DraggableImageState extends State<DraggableImage> {
   }
 
   void _validateMediaUrl() {
-    final mediaUrl = widget.mediaItem['value'] ?? '';
+    final mediaUrl = widget.item['value'] ?? '';
     if (mediaUrl.isEmpty) {
       _hasError = true;
       _isLoading = false;
@@ -969,20 +704,39 @@ class _DraggableImageState extends State<DraggableImage> {
         !mediaUrl.startsWith('data:image')) {
       _hasError = true;
       _isLoading = false;
+    } else {
+      _isLoading = false; // Assume loaded if value exists
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final position = widget.mediaItem['position'] ?? const Offset(50, 50);
-    final baseWidth = widget.mediaItem['width']?.toDouble() ??
-        (widget.isMobile ? 200.0 : 300.0);
-    final baseHeight = widget.mediaItem['height']?.toDouble() ??
-        (widget.isMobile ? 266.0 : 400.0);
+    final position = widget.item['position'] ?? const Offset(20, 20);
+    final baseWidth =
+        widget.item['width']?.toDouble() ?? (widget.isMobile ? 200.0 : 300.0);
+    final baseHeight =
+        widget.item['height']?.toDouble() ?? (widget.isMobile ? 266.0 : 400.0);
+    final text = widget.item['text'] ?? '';
+    final textColor = widget.item['textColor'] ?? Colors.black;
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontFamily: 'DeliciousHandrawn',
+          fontSize: 28,
+          color: textColor,
+        ),
+      ),
+      maxLines: null,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: baseWidth);
+
+    final totalHeight = baseHeight + textPainter.height;
 
     final topPosition = min<double>(
       (position.dy + _panOffset.dy).toDouble(),
-      (widget.maxHeight - baseHeight * _scale).toDouble(),
+      (widget.maxHeight - totalHeight * _scale).toDouble(),
     );
 
     return Positioned(
@@ -1000,17 +754,32 @@ class _DraggableImageState extends State<DraggableImage> {
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Container(
-                width: baseWidth,
-                height: baseHeight,
-                decoration: BoxDecoration(
-                  border: _isHovering
-                      ? Border.all(color: Colors.blue, width: 2)
-                      : null,
-                ),
-                child: _buildImageContent(baseWidth, baseHeight),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: baseWidth,
+                    height: baseHeight,
+                    decoration: BoxDecoration(
+                      border: _isHovering
+                          ? Border.all(color: Colors.blue, width: 2)
+                          : null,
+                    ),
+                    child: _buildImageContent(baseWidth, baseHeight),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    text,
+                    style: TextStyle(
+                      fontFamily: 'DeliciousHandrawn',
+                      fontSize: 28,
+                      color: textColor,
+                    ),
+                    maxLines: null,
+                  ),
+                ],
               ),
-              if (_isHovering) _buildDeleteButton(),
+              if (_isHovering) _buildDeleteButton(baseWidth),
               if (_isLoading && !_hasError)
                 Center(child: CircularProgressIndicator()),
             ],
@@ -1021,11 +790,11 @@ class _DraggableImageState extends State<DraggableImage> {
   }
 
   Widget _buildImageContent(double width, double height) {
-    if (widget.mediaItem['hasError'] == true) {
+    if (widget.item['hasError'] == true) {
       return _buildErrorPlaceholder(width, height);
     }
 
-    final mediaUrl = widget.mediaItem['value'] ?? '';
+    final mediaUrl = widget.item['value'] ?? '';
 
     if (mediaUrl.startsWith('data:image')) {
       try {
@@ -1054,7 +823,7 @@ class _DraggableImageState extends State<DraggableImage> {
         },
         errorBuilder: (_, __, ___) => _buildErrorPlaceholder(width, height),
       );
-    } else if (widget.mediaItem['fileId'] != null) {
+    } else if (widget.item['fileId'] != null && mediaUrl.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1071,7 +840,7 @@ class _DraggableImageState extends State<DraggableImage> {
     return _buildErrorPlaceholder(width, height);
   }
 
-  Widget _buildDeleteButton() {
+  Widget _buildDeleteButton(double width) {
     return Positioned(
       right: 8,
       top: 8,
@@ -1109,7 +878,7 @@ class _DraggableImageState extends State<DraggableImage> {
   void _handleDoubleTap() {
     setState(() {
       _scale = _scale == 1.0 ? 2.0 : 1.0;
-      _updateMediaItem();
+      _updateItem();
     });
   }
 
@@ -1121,38 +890,34 @@ class _DraggableImageState extends State<DraggableImage> {
     setState(() {
       _scale = (details.scale * _scale).clamp(0.5, 3.0);
       _panOffset += details.focalPointDelta;
-      _updateMediaItem();
+      _updateItem();
     });
   }
 
   void _handleScaleEnd(ScaleEndDetails _) {
     setState(() {
       widget.onPositionChanged({
-        ...widget.mediaItem,
+        ...widget.item,
         'position': Offset(
-          (widget.mediaItem['position']?.dx ?? 50) + _panOffset.dx,
-          (widget.mediaItem['position']?.dy ?? 50) + _panOffset.dy,
+          (widget.item['position']?.dx ?? 20) + _panOffset.dx,
+          (widget.item['position']?.dy ?? 20) + _panOffset.dy,
         ),
-        'width':
-            (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
-                _scale,
-        'height':
-            (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
-                _scale,
+        'width': (widget.item['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
+            _scale,
+        'height': (widget.item['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
+            _scale,
       });
-      _panOffset = Offset.zero; // Reset pan offset after updating position
+      _panOffset = Offset.zero;
     });
   }
 
-  void _updateMediaItem() {
+  void _updateItem() {
     widget.onPositionChanged({
-      ...widget.mediaItem,
+      ...widget.item,
       'width':
-          (widget.mediaItem['width'] ?? (widget.isMobile ? 200.0 : 300.0)) *
-              _scale,
+          (widget.item['width'] ?? (widget.isMobile ? 200.0 : 300.0)) * _scale,
       'height':
-          (widget.mediaItem['height'] ?? (widget.isMobile ? 266.0 : 400.0)) *
-              _scale,
+          (widget.item['height'] ?? (widget.isMobile ? 266.0 : 400.0)) * _scale,
     });
   }
 }

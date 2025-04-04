@@ -114,9 +114,8 @@ class _InsightPageState extends State<InsightPage>
 
   Future<Map<String, dynamic>> _travelRecommendations(
       Map<String, dynamic> data) async {
-    const String apiKey = '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';
-    const String apiUrl =
-        'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
+    const String apiKey = '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';
+    const String apiUrl = 'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
     final locations = (data['allPages'] as List<dynamic>?)
             ?.map((p) => p['location']?.toString() ?? '')
             .where((loc) => loc.isNotEmpty)
@@ -254,7 +253,7 @@ class _InsightPageState extends State<InsightPage>
   }
 
   Future<Map<String, dynamic>> _moodMapping(Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl =
         'https://api-inference.huggingface.co/models/distilbert-base-uncased-finetuned-sst-2-english';
     Map<String, List<double>> locationSentiments = {};
@@ -351,7 +350,7 @@ class _InsightPageState extends State<InsightPage>
 
   Future<Map<String, dynamic>> _activityRecommendations(
       Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl =
         'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
     final allText = (data['allPages'] as List<dynamic>?)
@@ -415,7 +414,7 @@ class _InsightPageState extends State<InsightPage>
               List<String> recommendations = labels
                   .asMap()
                   .entries
-                  .where((e) => scores[e.key] > 0.3)
+                  .where((e) => scores[e.key] > 0.1)
                   .map((e) => 'Try ${e.value}')
                   .toList();
               return {'recommendations': recommendations.take(5).toList()};
@@ -468,7 +467,7 @@ class _InsightPageState extends State<InsightPage>
   }
 
   Future<Map<String, dynamic>> _travelStyle(Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl =
         'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
     final allText = (data['allPages'] as List<dynamic>?)
@@ -591,7 +590,7 @@ class _InsightPageState extends State<InsightPage>
 
   Future<Map<String, dynamic>> _travelCultureAndCuisine(
       Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl =
         'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
     Map<String, int> cultureCounts = {
@@ -778,7 +777,7 @@ class _InsightPageState extends State<InsightPage>
   }
 
   Future<Map<String, dynamic>> _travelDNA(Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl =
         'https://api-inference.huggingface.co/models/facebook/bart-large-mnli';
     final allText = (data['allPages'] as List<dynamic>?)
@@ -921,7 +920,7 @@ class _InsightPageState extends State<InsightPage>
   }
 
   Future<Map<String, dynamic>> _travelFunFact(Map<String, dynamic> data) async {
-    const String apiKey = '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';
+    const String apiKey = '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';
     const String apiUrl = 'https://api-inference.huggingface.co/models/gpt2';
     final allText = (data['allPages'] as List<dynamic>?)
             ?.map((p) => p['textData']?.toString() ?? '')
