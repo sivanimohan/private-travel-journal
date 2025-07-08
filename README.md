@@ -6,9 +6,9 @@ A private, cross-platform travel journal app built using Flutter and Kotlin for 
 
 ## Features
 
-- ✈️ Log and organize travel experiences
+- ✈️ Log and organize your travel experiences
 - 🖼 Add photos and notes to your trips
-- 🔒 Private storage for your travel data
+- 🔒 Private storage for all your travel data
 - 🎨 Beautiful and intuitive Flutter interface
 - ☁️ Appwrite integration for backend services (Android)
 
@@ -20,15 +20,15 @@ A private, cross-platform travel journal app built using Flutter and Kotlin for 
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install)
 - Android Studio / Xcode / Suitable IDE
-- Java 8+
+- Java 8+ (for Android)
 - (For Android) Android SDK & build tools
 
 ### Installation
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/sivanimohan/privateTravelJournal.git
-   cd privateTravelJournal
+   git clone https://github.com/sivanimohan/private-travel-journal.git
+   cd private-travel-journal
    ```
 
 2. **Install dependencies**
@@ -62,7 +62,7 @@ A private, cross-platform travel journal app built using Flutter and Kotlin for 
 ## Directory Structure
 
 ```
-privateTravelJournal/
+private-travel-journal/
 ├── android/
 │   └── app/
 │       ├── build.gradle
